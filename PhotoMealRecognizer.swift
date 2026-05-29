@@ -1,10 +1,13 @@
 import Foundation
-import FoundationModels
 import UIKit
 import Vision
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 
 // MARK: - Structured output types
 
+#if canImport(FoundationModels)
 @Generable
 struct FoodRecognitionResponse {
     @Guide(description: "Erkannte Lebensmittel mit Mengenangaben in Gramm")
@@ -20,6 +23,13 @@ struct RecognizedFoodItem {
     @Guide(description: "Konfidenz 0.0–1.0")
     var confidence: Double
 }
+#else
+struct RecognizedFoodItem {
+    var name: String
+    var estimatedGrams: Int
+    var confidence: Double
+}
+#endif
 
 struct RecognitionResult {
     let items:          [RecognizedFoodItem]
@@ -42,9 +52,14 @@ enum PhotoMealRecognizer {
     }
 
     static var isAvailable: Bool {
+        #if canImport(FoundationModels)
         SystemLanguageModel.default.availability == .available
+        #else
+        false
+        #endif
     }
 
+    #if canImport(FoundationModels)
     // Zu generisch — verwirren FM mehr als sie helfen
     private static let genericLabels: Set<String> = [
         "food", "dish", "meal", "cuisine", "produce", "ingredient",
@@ -52,18 +67,20 @@ enum PhotoMealRecognizer {
         "plate", "bowl", "table", "fast food", "junk food", "snack food",
         "natural foods", "whole food", "recipe", "staple food"
     ]
+    #endif
 
     static func recognize(image: UIImage) async throws -> RecognitionResult {
+        #if canImport(FoundationModels)
         guard isAvailable else { throw RecognizerError.modelUnavailable }
 
         let visionLabels = try await classifyWithVision(image)
         guard !visionLabels.isEmpty else { throw RecognizerError.visionFailed }
 
         // Nur spezifische Labels ans FM — Top 8 reichen, kurzer Prompt = kein Overflow
-        let specific = visionLabels.filter { !genericLabels.contains($0.name.lowercased()) }
+        let specific  = visionLabels.filter { !genericLabels.contains($0.name.lowercased()) }
         let labelText = specific.prefix(8).map { $0.name }.joined(separator: ", ")
 
-        let prompt = "Vision-Labels: \(labelText). Lebensmittel auf Deutsch mit typischen Gramm-Mengen. Frittiertes als eigene Position. Farb-/Textur-Fehlklassifikationen korrigieren."
+        let prompt       = "Vision-Labels: \(labelText). Lebensmittel auf Deutsch mit typischen Gramm-Mengen. Frittiertes als eigene Position. Farb-/Textur-Fehlklassifikationen korrigieren."
         let instructions = "Ernährungs-Analyst. Lebensmittel aus Vision-Labels auf Deutsch identifizieren, realistische Portionsgrößen schätzen. Keine versteckten Zutaten."
 
         let session  = LanguageModelSession(instructions: instructions)
@@ -73,9 +90,12 @@ enum PhotoMealRecognizer {
         guard !items.isEmpty else { throw RecognizerError.noItemsDetected }
 
         return RecognitionResult(items: items, detectedLabels: visionLabels.map { $0.name })
+        #else
+        throw RecognizerError.modelUnavailable
+        #endif
     }
 
-    // MARK: - Vision
+    // MARK: - Vision (immer verfügbar)
 
     private struct LabelResult { let name: String; let confidence: Float }
 

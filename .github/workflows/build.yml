@@ -1,0 +1,64 @@
+name: Build Calo IPA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Neuestes Xcode wählen (iOS 26 SDK braucht Xcode 17+)
+      - name: Xcode auswählen
+        run: |
+          echo "=== Verfügbare Xcode-Versionen ==="
+          ls /Applications/ | grep Xcode || echo "(keine Xcode-Installationen gefunden)"
+          XCODE=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            echo "FEHLER: Kein Xcode gefunden"; exit 1
+          fi
+          echo "Verwende: $XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+
+      # Zeigt verfügbare Schemes — hilft beim Debuggen wenn Build schlägt fehl
+      - name: Schemes auflisten
+        run: xcodebuild -list 2>&1 || true
+
+      - name: Archive bauen
+        run: |
+          xcodebuild archive \
+            -scheme "Calo" \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/Calo.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            SKIP_INSTALL=NO
+
+      - name: IPA packen
+        run: |
+          APP=$(find "$RUNNER_TEMP/Calo.xcarchive/Products" -name "*.app" -type d | head -1)
+          if [ -z "$APP" ]; then
+            echo "FEHLER: Keine .app im Archive gefunden"
+            find "$RUNNER_TEMP/Calo.xcarchive" -type d | head -20
+            exit 1
+          fi
+          echo "Verpacke: $APP"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -r "$APP" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          zip -r Calo.ipa Payload
+          echo "IPA Größe: $(du -sh Calo.ipa | cut -f1)"
+
+      - name: IPA als Artifact hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: Calo-IPA
+          path: ${{ runner.temp }}/Calo.ipa
+          retention-days: 30

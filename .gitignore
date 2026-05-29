@@ -30,3 +30,5 @@ DerivedData/
 build/
 *.o
 *.d
+*.xcarchive
+*.ipa
