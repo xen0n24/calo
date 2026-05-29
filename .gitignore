@@ -1,0 +1,32 @@
+# Secrets & API Keys
+Secrets.swift
+secrets.swift
+*.key
+*.pem
+*.p8
+*.p12
+*.cer
+.env
+.env.*
+APIKeys.swift
+Config.swift
+
+# Claude Code & Superpowers
+.claude/
+.superpowers/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode / Swift Playgrounds
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+.swiftpm/xcode/
+DerivedData/
+
+# Build artifacts
+build/
+*.o
+*.d
