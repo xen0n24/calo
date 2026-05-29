@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: macos-15
@@ -41,17 +44,57 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             SKIP_INSTALL=NO
 
+      # xcodebuild legt den Binary bei executableTarget unter usr/local/bin/ ab,
+      # nicht in einem .app-Bundle. Wir bauen das Bundle manuell auf.
       - name: IPA packen
         run: |
-          APP=$(find "$RUNNER_TEMP/Calo.xcarchive/Products" -name "*.app" -type d | head -1)
-          if [ -z "$APP" ]; then
-            echo "FEHLER: Keine .app im Archive gefunden"
-            find "$RUNNER_TEMP/Calo.xcarchive" -type d | head -20
+          BINARY=$(find "$RUNNER_TEMP/Calo.xcarchive/Products" -name "Calo" -type f | head -1)
+          if [ -z "$BINARY" ]; then
+            echo "FEHLER: Binary 'Calo' nicht gefunden"
+            find "$RUNNER_TEMP/Calo.xcarchive" -type f | head -30
             exit 1
           fi
-          echo "Verpacke: $APP"
-          mkdir -p "$RUNNER_TEMP/Payload"
-          cp -r "$APP" "$RUNNER_TEMP/Payload/"
+          echo "Binary gefunden: $BINARY"
+
+          APP_DIR="$RUNNER_TEMP/Payload/Calo.app"
+          mkdir -p "$APP_DIR"
+          cp "$BINARY" "$APP_DIR/Calo"
+          chmod +x "$APP_DIR/Calo"
+          cp seed-foods-de.json "$APP_DIR/"
+
+          python3 - "$APP_DIR" <<'PY'
+          import plistlib, sys
+          plist = {
+              'CFBundleIdentifier': 'com.jonathan.calo',
+              'CFBundleExecutable': 'Calo',
+              'CFBundleName': 'Calo',
+              'CFBundleDisplayName': 'Calo',
+              'CFBundleVersion': '1',
+              'CFBundleShortVersionString': '1.0',
+              'MinimumOSVersion': '26.0',
+              'CFBundlePackageType': 'APPL',
+              'CFBundleSupportedPlatforms': ['iPhoneOS'],
+              'UILaunchScreen': {},
+              'UISupportedInterfaceOrientations': [
+                  'UIInterfaceOrientationPortrait',
+                  'UIInterfaceOrientationLandscapeLeft',
+                  'UIInterfaceOrientationLandscapeRight',
+              ],
+              'UISupportedInterfaceOrientations~ipad': [
+                  'UIInterfaceOrientationPortrait',
+                  'UIInterfaceOrientationLandscapeLeft',
+                  'UIInterfaceOrientationLandscapeRight',
+                  'UIInterfaceOrientationPortraitUpsideDown',
+              ],
+          }
+          with open(sys.argv[1] + '/Info.plist', 'wb') as f:
+              plistlib.dump(plist, f)
+          print('Info.plist geschrieben')
+          PY
+
+          echo "=== Bundle-Inhalt ==="
+          ls -lh "$APP_DIR"
+
           cd "$RUNNER_TEMP"
           zip -r Calo.ipa Payload
           echo "IPA Größe: $(du -sh Calo.ipa | cut -f1)"
