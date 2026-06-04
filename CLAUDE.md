@@ -13,7 +13,7 @@ Native iOS-Kalorientracking-App. Hobby-Projekt, Distribution direkt über Swift 
 - **Architektur:** MV (Model-View) — keine ViewModels
 - **Persistierung:** SwiftData
 - **Sprache UI:** Deutsch. Code-Bezeichner: Englisch.
-- **Alle `.swift`-Dateien liegen im Root** (kein `Sources/`-Unterordner). `Package.swift` nutzt `path: "."`.
+- **Ordnerstruktur:** `Core/` (Logik, Modelle, Services) und `Views/` (SwiftUI-Views). `Package.swift` nutzt `path: "."` — SPM findet `.swift`-Dateien rekursiv.
 - **Sync:** iCloud Drive (iCloud for Windows). Änderungen werden manuell auf iPad übertragen, weil iCloud-Sync unzuverlässig ist.
 
 ## Workflow-Regeln
@@ -70,35 +70,55 @@ container = try ModelContainer(for:
 
 `MacroSplit` ist ein `Codable`-Struct (kein eigenes `@Model`), eingebettet in `UserProfile`.
 
-## Alle Dateien (Stand 2026-05-13)
+## Alle Dateien (Stand 2026-06-04)
+
+### Core/ (Logik, Daten, Services)
 
 | Datei | Inhalt |
 |---|---|
-| `CaloApp.swift` | @main, ModelContainer |
-| `ContentView.swift` | Routing: Onboarding ↔ MainTabView |
-| `MainTabView.swift` | TabView (Tagebuch, Suche, Statistik, Profil) + Badge auf Tagebuch-Tab |
-| `Models.swift` | Alle SwiftData-Modelle + Enums + Recipe-Extensions; `BodyMeasurementType` hat `groupName: String?` |
-| `SeedFoodImporter.swift` | Importiert `seed-foods-de.json` beim ersten Start |
-| `TDEECalculator.swift` | Pure Functions: age, bmr, tdee, calorieTarget |
-| `AdaptiveCalorieEngine.swift` | Adaptiver Algorithmus (14-Tage-Fenster, ±100 kcal/0.1 kg) |
-| `NotificationManager.swift` | UNUserNotificationCenter: tägliche + wöchentliche Erinnerungen |
-| `OnboardingView.swift` | 8-Schritt-Onboarding, speichert UserProfile + erstes WeightEntry |
-| `DiaryView.swift` | Tagebuch: CalorieSummaryCard (Ring-Animation, Kalorien-Übertrag), WaterCard, MealSectionCard, EntryRow, DiaryEntryEditSheet |
-| `FoodSearchSheet.swift` | Sheet aus Tagebuch „+": Chips für zuletzt genutzte Foods, AmountInputView (TextField + Schnellschritte), Suche, Barcode, Rezepte |
-| `SearchView.swift` | Such-Tab: Foods + Rezepte, Vorschläge, Online-Suche, FoodDetailSheet |
-| `CustomFoodSheet.swift` | Eigenes Lebensmittel erstellen oder bearbeiten |
-| `BarcodeScannerView.swift` | VisionKit DataScannerViewController-Wrapper |
-| `OpenFoodFactsClient.swift` | OFF API v2: product(barcode:) + search(query:) |
-| `RecipesView.swift` | RecipeRow, RecipeDetailSheet (mit Tagebuch-Log) |
-| `RecipeEditorView.swift` | Rezept-Editor + IngredientPickerSheet |
-| `StatsView.swift` | Streak, Gewicht-Chart, Kalorien-Chart, TDEE, Adaptives Ziel, Gewichtsprognose, Körpermaße (Separat/Kombiniert/Gruppen), WeightLoggerSheet, BodyMeasurementLoggerSheet, GroupManagerSheet |
-| `ProfileView.swift` | Profil, BMI-Farbbalken (BMIScaleRow), TDEE, Benachrichtigungen, Reset |
-| `ProfileEditSheet.swift` | Ziel / Aktivität / Rate / Kalorienziel / Wasserziel / MacroSplit bearbeiten |
-| `OptionalFeaturesView.swift` | Feature-Flags: Körpermaße, Foto-Erkennung, Kalorien-Übertrag |
-| `HapticManager.swift` | UIImpactFeedbackGenerator-Wrapper |
-| `MyApp.swift` | Stub (leer, ignorieren) |
-| `AppTheme.swift` | `@Observable @MainActor AppTheme`-Klasse: alle Farb-Slots als Hex-Strings in UserDefaults, Color-Extensions (`init(hex:)`, `toHex()`), `resetToDefaults()` |
-| `ThemeView.swift` | Theme-Maker: `ThemeView` (NavigationLink-Ziel), `NormalThemeSection` (Swatches + ColorPicker + Dark/Light-Toggle), `AdvancedThemeSection` (Gruppen), `ThemePreviewCard` (Live-Vorschau) |
+| `Core/Models.swift` | Alle SwiftData-Modelle + Enums + Recipe-Extensions; `BodyMeasurementType` hat `groupName: String?` |
+| `Core/TDEECalculator.swift` | Pure Functions: age, bmr, tdee, calorieTarget |
+| `Core/AdaptiveCalorieEngine.swift` | Adaptiver Algorithmus (14-Tage-Fenster, ±100 kcal/0.1 kg) |
+| `Core/OpenFoodFactsClient.swift` | OFF API v2: product(barcode:) + search(query:) |
+| `Core/FoodSearch.swift` | Lokale Lebensmittelsuche-Logik |
+| `Core/SeedFoodImporter.swift` | Importiert `seed-foods-de.json` beim ersten Start |
+| `Core/NotificationManager.swift` | UNUserNotificationCenter: tägliche + wöchentliche Erinnerungen |
+| `Core/HapticManager.swift` | UIImpactFeedbackGenerator-Wrapper |
+| `Core/AppTheme.swift` | `@Observable @MainActor AppTheme`-Klasse: alle Farb-Slots als Hex-Strings in UserDefaults, Color-Extensions (`init(hex:)`, `toHex()`), `resetToDefaults()` |
+| `Core/BackupManager.swift` | Backup/Restore-Logik |
+| `Core/PhotoMealRecognizer.swift` | Foto-basierte Mahlzeiterkennung (Vision/ML) |
+
+### Views/ (SwiftUI)
+
+| Datei | Inhalt |
+|---|---|
+| `Views/CaloApp.swift` | @main, ModelContainer |
+| `Views/ContentView.swift` | Routing: Onboarding ↔ MainTabView |
+| `Views/MainTabView.swift` | TabView (Tagebuch, Suche, Statistik, Profil) + Badge auf Tagebuch-Tab |
+| `Views/OnboardingView.swift` | 8-Schritt-Onboarding, speichert UserProfile + erstes WeightEntry |
+| `Views/DiaryView.swift` | Tagebuch: CalorieSummaryCard (Ring-Animation, Kalorien-Übertrag), WaterCard, MealSectionCard, EntryRow, DiaryEntryEditSheet |
+| `Views/FoodSearchSheet.swift` | Sheet aus Tagebuch „+": Chips für zuletzt genutzte Foods, AmountInputView (TextField + Schnellschritte), Suche, Barcode, Rezepte |
+| `Views/SearchView.swift` | Such-Tab: Foods + Rezepte, Vorschläge, Online-Suche, FoodDetailSheet |
+| `Views/CustomFoodSheet.swift` | Eigenes Lebensmittel erstellen oder bearbeiten |
+| `Views/BarcodeScannerView.swift` | VisionKit DataScannerViewController-Wrapper |
+| `Views/RecipesView.swift` | RecipeRow, RecipeDetailSheet (mit Tagebuch-Log) |
+| `Views/RecipeEditorView.swift` | Rezept-Editor + IngredientPickerSheet |
+| `Views/StatsView.swift` | Streak, Gewicht-Chart, Kalorien-Chart, TDEE, Adaptives Ziel, Gewichtsprognose, Körpermaße (Separat/Kombiniert/Gruppen), WeightLoggerSheet, BodyMeasurementLoggerSheet, GroupManagerSheet |
+| `Views/ProfileView.swift` | Profil, BMI-Farbbalken (BMIScaleRow), TDEE, Benachrichtigungen, Reset |
+| `Views/ProfileEditSheet.swift` | Ziel / Aktivität / Rate / Kalorienziel / Wasserziel / MacroSplit bearbeiten |
+| `Views/OptionalFeaturesView.swift` | Feature-Flags: Körpermaße, Foto-Erkennung, Kalorien-Übertrag |
+| `Views/ThemeView.swift` | Theme-Maker: `ThemeView` (NavigationLink-Ziel), `NormalThemeSection` (Swatches + ColorPicker + Dark/Light-Toggle), `AdvancedThemeSection` (Gruppen), `ThemePreviewCard` (Live-Vorschau) |
+| `Views/MealTemplateEditorView.swift` | Mahlzeit-Vorlagen Editor |
+| `Views/PhotoMealSheet.swift` | Foto-Mahlzeit-Sheet (Kamera + Erkennung) |
+| `Views/FlowLayout.swift` | Flexibles Flow-Layout für Chips/Tags |
+| `Views/MyApp.swift` | Stub (leer, ignorieren) |
+
+### Root
+
+| Datei | Inhalt |
+|---|---|
+| `Package.swift` | SPM-Konfiguration (`path: "."`, findet Swift-Dateien rekursiv) |
+| `seed-foods-de.json` | Seed-Datenbank für `SeedFoodImporter` |
 
 ## Features (vollständig implementiert)
 
