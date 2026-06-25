@@ -33,6 +33,9 @@ let package = Package(
         .executableTarget(
             name: "AppModule",
             path: ".",
+            exclude: [
+                "gen_icon.swift"
+            ],
             resources: [
                 .process("seed-foods-de.json"),
                 .process("Assets.xcassets")
