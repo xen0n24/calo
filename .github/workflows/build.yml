@@ -62,8 +62,34 @@ jobs:
           chmod +x "$APP_DIR/Calo"
           cp seed-foods-de.json "$APP_DIR/"
 
-          python3 - "$APP_DIR" <<'PY'
-          import plistlib, sys
+          # App-Icon: Assets.xcassets mit actool kompilieren → Assets.car ins Bundle
+          echo "=== Kompiliere App-Icon ==="
+          mkdir -p /tmp/assets_out
+          xcrun actool Assets.xcassets \
+            --compile /tmp/assets_out \
+            --platform iphoneos \
+            --minimum-deployment-target 26.0 \
+            --target-device iphone \
+            --target-device ipad \
+            --compress-pngs \
+            --output-format human-readable-text \
+            --notices --warnings \
+            --app-icon AppIcon \
+            --output-partial-info-plist /tmp/assets_out/partial.plist \
+            2>&1 || true
+
+          echo "actool Output:"
+          ls -lh /tmp/assets_out/ || true
+
+          if [ -f /tmp/assets_out/Assets.car ]; then
+            cp /tmp/assets_out/Assets.car "$APP_DIR/"
+            echo "Assets.car kopiert ($(du -sh /tmp/assets_out/Assets.car | cut -f1))"
+          else
+            echo "Warnung: Assets.car nicht gefunden"
+          fi
+
+          python3 - "$APP_DIR" /tmp/assets_out/partial.plist <<'PY'
+          import plistlib, sys, os
           plist = {
               'CFBundleIdentifier': 'com.jonathan.calo',
               'CFBundleExecutable': 'Calo',
@@ -74,6 +100,7 @@ jobs:
               'MinimumOSVersion': '26.0',
               'CFBundlePackageType': 'APPL',
               'CFBundleSupportedPlatforms': ['iPhoneOS'],
+              'CFBundleIconName': 'AppIcon',
               'UILaunchScreen': {},
               'UISupportedInterfaceOrientations': [
                   'UIInterfaceOrientationPortrait',
@@ -87,6 +114,13 @@ jobs:
                   'UIInterfaceOrientationPortraitUpsideDown',
               ],
           }
+          # Merge partial plist from actool (enthält CFBundleIcons etc.)
+          partial_path = sys.argv[2]
+          if os.path.exists(partial_path):
+              with open(partial_path, 'rb') as f:
+                  partial = plistlib.load(f)
+              plist.update(partial)
+              print('Partial plist gemergt:', list(partial.keys()))
           with open(sys.argv[1] + '/Info.plist', 'wb') as f:
               plistlib.dump(plist, f)
           print('Info.plist geschrieben')
