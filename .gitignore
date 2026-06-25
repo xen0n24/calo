@@ -20,6 +20,11 @@ Config.swift
 .AppleDouble
 .LSOverride
 
+# iCloud Drive Konfliktkopien (z.B. "File 2.swift", "File 3.swift")
+* 2.swift
+* 3.swift
+* 4.swift
+
 # Xcode / Swift Playgrounds
 *.xcuserstate
 *.xcworkspace/xcuserdata/
