@@ -15,8 +15,8 @@ let package = Package(
             bundleIdentifier: "com.jonathan.calo",
             displayVersion: "1.0",
             bundleVersion: "1",
-            appIcon: .placeholder(icon: .note),
-            accentColor: .presetColor(.pink),
+            appIcon: .xcassets("AppIcon"),
+            accentColor: .presetColor(.green),
             supportedDeviceFamilies: [
                 .pad,
                 .phone
