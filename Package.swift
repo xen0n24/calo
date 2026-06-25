@@ -15,7 +15,7 @@ let package = Package(
             bundleIdentifier: "com.jonathan.calo",
             displayVersion: "1.0",
             bundleVersion: "1",
-            appIcon: .xcassets("AppIcon"),
+            appIcon: .placeholder(icon: .note),
             accentColor: .presetColor(.green),
             supportedDeviceFamilies: [
                 .pad,
@@ -34,7 +34,8 @@ let package = Package(
             name: "AppModule",
             path: ".",
             resources: [
-                .process("seed-foods-de.json")
+                .process("seed-foods-de.json"),
+                .process("Assets.xcassets")
             ],
             swiftSettings: [
                 .enableUpcomingFeature("BareSlashRegexLiterals")
