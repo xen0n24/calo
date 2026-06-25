@@ -46,6 +46,9 @@ jobs:
 
       # xcodebuild legt den Binary bei executableTarget unter usr/local/bin/ ab,
       # nicht in einem .app-Bundle. Wir bauen das Bundle manuell auf.
+      - name: App-Icon generieren (SF Symbol)
+        run: swift gen_icon.swift Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+
       - name: IPA packen
         run: |
           BINARY=$(find "$RUNNER_TEMP/Calo.xcarchive/Products" -name "Calo" -type f | head -1)
