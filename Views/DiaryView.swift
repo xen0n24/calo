@@ -69,6 +69,7 @@ struct DiaryView: View {
     }
 
     private func copyEntries(fromDaysBefore days: Int) {
+        HapticManager.notification(.success)
         let cal        = Calendar.current
         let targetDay  = cal.startOfDay(for: selectedDate)
         let sourceDay  = cal.date(byAdding: .day, value: -days, to: targetDay)!
@@ -112,6 +113,7 @@ struct DateNavigatorBar: View {
             }
 
             Button {
+                HapticManager.impact(.light)
                 withAnimation(.easeInOut(duration: 0.2)) { selectedDate = .now }
             } label: {
                 Text(dateLabel)
@@ -136,6 +138,7 @@ struct DateNavigatorBar: View {
     }
 
     private func advance(by days: Int) {
+        HapticManager.selection()
         withAnimation(.easeInOut(duration: 0.2)) {
             selectedDate = cal.date(byAdding: .day, value: days, to: selectedDate) ?? selectedDate
         }

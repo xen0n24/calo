@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import VisionKit
+import AVFoundation
 
 // MARK: - FoodSelection
 
@@ -129,9 +130,10 @@ struct FoodSearchSheet: View {
     @State private var isLoadingOnline    = false
     @State private var onlineResults: [OFFProduct] = []
     @State private var searchTask: Task<Void, Never>? = nil
-    @State private var showScanner        = false
-    @State private var isLookingUpBarcode = false
-    @State private var barcodeNotFound    = false
+    @State private var showScanner              = false
+    @State private var isLookingUpBarcode       = false
+    @State private var barcodeNotFound          = false
+    @State private var showCameraPermissionAlert = false
     @State private var showManualEntry    = false
     @State private var portionIdx:        Int    = -1
     @State private var portionCountInt:   Int    = 1
@@ -207,7 +209,7 @@ struct FoodSearchSheet: View {
                         ToolbarItem(placement: .navigationBarTrailing) {
                             if DataScannerViewController.isSupported {
                                 Button {
-                                    showScanner = true
+                                    Task { await requestCameraForScanner() }
                                 } label: {
                                     Image(systemName: "barcode.viewfinder")
                                         .font(.title3)
@@ -227,6 +229,11 @@ struct FoodSearchSheet: View {
                         Button("OK", role: .cancel) {}
                     } message: {
                         Text("Zu diesem Barcode wurde kein Produkt in der Open Food Facts Datenbank gefunden.")
+                    }
+                    .alert("Kamerazugriff verweigert", isPresented: $showCameraPermissionAlert) {
+                        Button("OK", role: .cancel) {}
+                    } message: {
+                        Text("Bitte erlaube den Kamerazugriff in den iOS-Einstellungen unter Datenschutz → Kamera.")
                     }
                     .overlay {
                         if isLookingUpBarcode {
@@ -805,6 +812,20 @@ struct FoodSearchSheet: View {
         let food = Food(name: r.name, source: .recipe, nutritionPer100g: nutrition)
         modelContext.insert(food)
         return food
+    }
+
+    @MainActor
+    private func requestCameraForScanner() async {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            showScanner = true
+        case .notDetermined:
+            let granted = await AVCaptureDevice.requestAccess(for: .video)
+            if granted { showScanner = true }
+            else { showCameraPermissionAlert = true }
+        default:
+            showCameraPermissionAlert = true
+        }
     }
 
     @MainActor
