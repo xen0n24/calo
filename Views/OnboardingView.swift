@@ -76,6 +76,7 @@ struct OnboardingView: View {
         HStack {
             if step > 0 {
                 Button {
+                    HapticManager.impact(.light)
                     withAnimation(.easeInOut(duration: 0.25)) { step -= 1 }
                 } label: {
                     Label("Zurück", systemImage: "chevron.left")
@@ -87,6 +88,7 @@ struct OnboardingView: View {
 
             if step < totalSteps - 1 {
                 Button {
+                    HapticManager.impact(.medium)
                     withAnimation(.easeInOut(duration: 0.25)) { step += 1 }
                 } label: {
                     Text("Weiter")
@@ -97,6 +99,7 @@ struct OnboardingView: View {
                 .tint(theme.accent)
             } else {
                 Button {
+                    HapticManager.notification(.success)
                     saveProfile()
                 } label: {
                     Text("Los geht's!")
@@ -148,7 +151,10 @@ struct OnboardingView: View {
 
     private func sexCard(_ s: Sex) -> some View {
         let selected = sex == s
-        return Button { sex = s } label: {
+        return Button {
+            HapticManager.selection()
+            sex = s
+        } label: {
             VStack(spacing: 14) {
                 Image(systemName: s == .male ? "figure.stand" : "figure.stand.dress")
                     .font(.system(size: 52))
@@ -220,7 +226,10 @@ struct OnboardingView: View {
 
     private func activityRow(_ level: ActivityLevel) -> some View {
         let selected = activityLevel == level
-        return Button { activityLevel = level } label: {
+        return Button {
+            HapticManager.selection()
+            activityLevel = level
+        } label: {
             HStack {
                 Text(level.rawValue)
                     .font(.headline)
@@ -258,7 +267,10 @@ struct OnboardingView: View {
 
     private func goalRow(_ g: Goal) -> some View {
         let selected = goal == g
-        return Button { withAnimation { goal = g } } label: {
+        return Button {
+            HapticManager.selection()
+            withAnimation { goal = g }
+        } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(g.rawValue).font(.headline)
@@ -424,6 +436,7 @@ struct NumericStepperView: View {
             Stepper("", value: $value, in: range, step: step)
                 .labelsHidden()
                 .scaleEffect(1.2)
+                .onChange(of: value) { HapticManager.selection() }
         }
     }
 
