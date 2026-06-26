@@ -282,14 +282,9 @@ struct PhotoMealSheet: View {
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(matched?.name ?? item.wrappedValue.name)
+                    TextField("Name", text: item.name)
                         .font(.subheadline.weight(.medium))
-                    if let food = matched {
-                        if food.name.lowercased() != item.wrappedValue.name.lowercased() {
-                            Text("KI: \u{201E}\(item.wrappedValue.name)\u{201C}")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    } else {
+                    if matched == nil {
                         Text("Nicht gefunden — zum Suchen tippen")
                             .font(.caption).foregroundStyle(.orange)
                     }
@@ -426,6 +421,11 @@ struct PhotoMealSheet: View {
         let day = Calendar.current.startOfDay(for: date)
         for item in draftItems {
             guard let food = item.matchedFood, item.grams > 0 else { continue }
+            // Namen übernehmen wenn KI ein neues Lebensmittel angelegt hat und User ihn geändert hat
+            let trimmed = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if food.source == .custom && !trimmed.isEmpty && food.name != trimmed {
+                food.name = trimmed
+            }
             modelContext.insert(DiaryEntry(date: day, meal: selectedMeal, food: food, grams: item.grams))
         }
         try? modelContext.save()
