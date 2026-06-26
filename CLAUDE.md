@@ -25,7 +25,7 @@ Native iOS-Kalorientracking-App. Hobby-Projekt, Distribution direkt über Swift 
 
 ## Swift-Playgrounds-Limits (KRITISCH)
 
-- ❌ **Kein `Info.plist` editierbar** → Capabilities (Kamera, etc.) werden im Playgrounds-UI gesetzt
+- ✅ **`Info.plist` wird im CI-Workflow generiert** → `NSCameraUsageDescription` und andere Keys direkt im Python-Dict in `.github/workflows/build.yml` eintragen
 - ❌ **Kein verschachteltes `List` in `List`** → crasht ohne Fehlermeldung → immer `ForEach` direkt in äußerem `List`
 - ❌ **`@retroactive` nur für fremde Module** → `@Model`-Typen sind bereits `Identifiable`, keine Extension nötig
 - ❌ **`ForEach` mit Index-`id`** + `.onDelete` crasht → immer `Identifiable`-Struct verwenden

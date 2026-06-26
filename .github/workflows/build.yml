@@ -116,6 +116,7 @@ jobs:
                   'UIInterfaceOrientationLandscapeRight',
                   'UIInterfaceOrientationPortraitUpsideDown',
               ],
+              'NSCameraUsageDescription': 'Calo verwendet die Kamera zum Scannen von Barcodes auf Lebensmitteln.',
           }
           # Merge partial plist from actool (enthält CFBundleIcons etc.)
           partial_path = sys.argv[2]
