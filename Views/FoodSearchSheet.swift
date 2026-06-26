@@ -139,6 +139,9 @@ struct FoodSearchSheet: View {
     @State private var portionCountInt:   Int    = 1
     @State private var portionGramsInt:   Int    = 100
     @State private var useMilliliters:    Bool   = false
+    @State private var showAddPortion:    Bool   = false
+    @State private var newPortionName:    String = ""
+    @State private var newPortionGrams:   String = ""
 
     private static let gramValues: [Int] = Array(stride(from: 5, through: 2000, by: 5))
 
@@ -686,9 +689,32 @@ struct FoodSearchSheet: View {
                 .tint(theme.accent)
                 .padding(.horizontal)
 
+                // Portion definieren – nur für lokale Foods
+                if case .local = sel {
+                    Button {
+                        newPortionName  = ""
+                        newPortionGrams = ""
+                        showAddPortion  = true
+                    } label: {
+                        Label("Portion definieren", systemImage: "plus.circle")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 4)
+                }
+
                 Spacer(minLength: 0)
             }
             .padding(.top, 20)
+            .sheet(isPresented: $showAddPortion) {
+                if case .local(let food) = sel {
+                    AddPortionSheet(food: food, onSave: { newPortion in
+                        // Portion-Picker auf neue Portion setzen
+                        portionIdx      = food.portions.count - 1
+                        portionCountInt = 1
+                    })
+                }
+            }
         }
     }
 
@@ -1073,6 +1099,90 @@ struct WheelAmountPicker: View {
     private static func snap(_ val: Double) -> Int {
         let rounded = Int((val / Double(step)).rounded()) * step
         return max(step, min(maxVal, rounded))
+    }
+}
+
+// MARK: - AddPortionSheet
+
+struct AddPortionSheet: View {
+    let food: Food
+    let onSave: (FoodPortion) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppTheme.self) private var theme
+
+    @State private var name:      String = ""
+    @State private var gramsText: String = ""
+
+    private static let quickOptions: [(String, Double)] = [
+        ("1 Scheibe",   25),
+        ("1 Stück",     50),
+        ("1 Handvoll",  30),
+        ("1 Portion",  150),
+        ("1 Glas",     200),
+        ("1 Tasse",    240),
+        ("1 EL",        15),
+        ("1 TL",         5),
+    ]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Schnellauswahl") {
+                    ForEach(Self.quickOptions, id: \.0) { label, grams in
+                        Button {
+                            name      = label
+                            gramsText = "\(Int(grams))"
+                        } label: {
+                            HStack {
+                                Text(label)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                Text("\(Int(grams)) g")
+                                    .foregroundStyle(.secondary)
+                                    .font(.subheadline)
+                                if name == label {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(theme.accent)
+                                        .font(.subheadline.weight(.semibold))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Section("Eigene Portion") {
+                    TextField("Name (z. B. 1 Scheibe)", text: $name)
+                    HStack {
+                        TextField("Gramm", text: $gramsText)
+                            .keyboardType(.numberPad)
+                        Text("g")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Portion definieren")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Abbrechen") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Speichern") {
+                        guard !name.trimmingCharacters(in: .whitespaces).isEmpty,
+                              let g = Double(gramsText), g > 0 else { return }
+                        let portion = FoodPortion(name: name, grams: g)
+                        food.portions.append(portion)
+                        onSave(portion)
+                        dismiss()
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty
+                              || Double(gramsText) == nil
+                              || (Double(gramsText) ?? 0) <= 0)
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
 

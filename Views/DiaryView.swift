@@ -852,28 +852,30 @@ struct DiaryEntryEditSheet: View {
     @Environment(\.modelContext)  private var modelContext
     @Environment(\.dismiss)       private var dismiss
 
-    @State private var grams:         Double
-    @State private var meal:          MealType
-    @State private var date:          Date
-    @State private var note:          String
+    @State private var grams:           Double
+    @State private var useMilliliters:  Bool
+    @State private var meal:            MealType
+    @State private var date:            Date
+    @State private var note:            String
     // Felder für manuelle Einträge
-    @State private var manualName:    String
-    @State private var manualKcal:    Double
-    @State private var manualProtein: Double
-    @State private var manualCarbs:   Double
-    @State private var manualFat:     Double
+    @State private var manualName:      String
+    @State private var manualKcal:      Double
+    @State private var manualProtein:   Double
+    @State private var manualCarbs:     Double
+    @State private var manualFat:       Double
 
     init(entry: DiaryEntry) {
         self.entry = entry
-        _grams         = State(initialValue: entry.grams)
-        _meal          = State(initialValue: entry.meal)
-        _date          = State(initialValue: entry.date)
-        _note          = State(initialValue: entry.note ?? "")
-        _manualName    = State(initialValue: entry.manualName    ?? "")
-        _manualKcal    = State(initialValue: entry.manualKcal    ?? 0)
-        _manualProtein = State(initialValue: entry.manualProtein ?? 0)
-        _manualCarbs   = State(initialValue: entry.manualCarbs   ?? 0)
-        _manualFat     = State(initialValue: entry.manualFat     ?? 0)
+        _grams           = State(initialValue: entry.grams)
+        _useMilliliters  = State(initialValue: entry.food?.unit == .milliliters)
+        _meal            = State(initialValue: entry.meal)
+        _date            = State(initialValue: entry.date)
+        _note            = State(initialValue: entry.note ?? "")
+        _manualName      = State(initialValue: entry.manualName    ?? "")
+        _manualKcal      = State(initialValue: entry.manualKcal    ?? 0)
+        _manualProtein   = State(initialValue: entry.manualProtein ?? 0)
+        _manualCarbs     = State(initialValue: entry.manualCarbs   ?? 0)
+        _manualFat       = State(initialValue: entry.manualFat     ?? 0)
     }
 
     private var kcalPreview: Int {
@@ -935,11 +937,14 @@ struct DiaryEntryEditSheet: View {
                             .foregroundStyle(theme.accent)
                     }
                     Section("Menge") {
-                        NumericStepperView(value: $grams, range: 1...5_000, step: 5, unit: "g")
-                        if let serving = entry.food?.defaultServingGrams {
-                            Button("Standardportion: \(Int(serving)) g") { grams = serving }
-                                .foregroundStyle(theme.accent)
-                        }
+                        WheelAmountPicker(
+                            grams:          $grams,
+                            useMilliliters: $useMilliliters,
+                            canToggleUnit:  true,
+                            defaultServing: entry.food?.defaultServingGrams
+                        )
+                        .listRowInsets(EdgeInsets())
+                        .padding(.vertical, 8)
                     }
                 }
 

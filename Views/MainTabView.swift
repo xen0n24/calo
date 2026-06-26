@@ -23,8 +23,6 @@ struct MainTabView: View {
                 .tag(3)
         }
         .tint(.green)
-        .onChange(of: selectedTab) {
-            HapticManager.selection()
-        }
+        .sensoryFeedback(.selection, trigger: selectedTab)
     }
 }
