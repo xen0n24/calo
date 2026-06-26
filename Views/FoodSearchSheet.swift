@@ -291,8 +291,8 @@ struct FoodSearchSheet: View {
                 if localResults.isEmpty && onlineResults.isEmpty && !isLoadingOnline {
                     emptyState
                 }
-                if !localResults.isEmpty {
-                    Section("Meine Lebensmittel") {
+                if !localResults.isEmpty || isLoadingOnline || !onlineResults.isEmpty {
+                    Section {
                         ForEach(localResults) { food in
                             Button { pick(.local(food)) } label: {
                                 FoodResultRow(
@@ -309,38 +309,35 @@ struct FoodSearchSheet: View {
                                 }
                             }
                         }
+
+                        if isLoadingOnline {
+                            HStack(spacing: 12) {
+                                ProgressView()
+                                Text("Suche online…").foregroundStyle(.secondary).font(.subheadline)
+                            }
+                            .padding(.vertical, 4)
+                        } else {
+                            ForEach(onlineResults) { product in
+                                Button { pick(.remote(product)) } label: {
+                                    FoodResultRow(
+                                        name:   product.displayName,
+                                        detail: "\(Int(product.nutriments.energyKcal100g ?? 0)) kcal / 100 g",
+                                        badge:  product.brandText
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
                 }
                 if !recipeResults.isEmpty {
-                    Section("Meine Rezepte") {
+                    Section("Rezepte") {
                         ForEach(recipeResults) { recipe in
                             Button { pick(.recipe(recipe)) } label: {
                                 FoodResultRow(
                                     name:   recipe.name,
                                     detail: "\(Int(recipe.kcalPer100g)) kcal / 100 g",
                                     badge:  "\(Int(recipe.totalCookedWeightGrams)) g gesamt"
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                if isLoadingOnline {
-                    Section("Open Food Facts") {
-                        HStack(spacing: 12) {
-                            ProgressView()
-                            Text("Suche online…").foregroundStyle(.secondary).font(.subheadline)
-                        }
-                        .padding(.vertical, 4)
-                    }
-                } else if !onlineResults.isEmpty {
-                    Section("Open Food Facts") {
-                        ForEach(onlineResults) { product in
-                            Button { pick(.remote(product)) } label: {
-                                FoodResultRow(
-                                    name:   product.displayName,
-                                    detail: "\(Int(product.nutriments.energyKcal100g ?? 0)) kcal / 100 g",
-                                    badge:  product.brandText
                                 )
                             }
                             .buttonStyle(.plain)

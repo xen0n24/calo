@@ -198,30 +198,26 @@ struct SearchView: View {
             }
         }
 
-        if !localFoods.isEmpty {
-            Section("Meine Lebensmittel") {
+        if !localFoods.isEmpty || isLoadingOnline || !onlineResults.isEmpty {
+            Section {
                 ForEach(localFoods) { foodRow($0) }
-            }
-        }
 
-        if isLoadingOnline {
-            Section("Open Food Facts") {
-                HStack(spacing: 12) {
-                    ProgressView()
-                    Text("Suche online…").foregroundStyle(.secondary).font(.subheadline)
-                }
-            }
-        } else if !onlineResults.isEmpty {
-            Section("Open Food Facts") {
-                ForEach(onlineResults) { product in
-                    Button { addAndSelect(product) } label: {
-                        FoodResultRow(
-                            name:   product.displayName,
-                            detail: "\(Int(product.nutriments.energyKcal100g ?? 0)) kcal / 100 g",
-                            badge:  product.brandText
-                        )
+                if isLoadingOnline {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                        Text("Suche online…").foregroundStyle(.secondary).font(.subheadline)
                     }
-                    .buttonStyle(.plain)
+                } else {
+                    ForEach(onlineResults) { product in
+                        Button { addAndSelect(product) } label: {
+                            FoodResultRow(
+                                name:   product.displayName,
+                                detail: "\(Int(product.nutriments.energyKcal100g ?? 0)) kcal / 100 g",
+                                badge:  product.brandText
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         } else if !searchText.isEmpty && localFoods.isEmpty && !isLoadingOnline {
