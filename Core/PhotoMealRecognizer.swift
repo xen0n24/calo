@@ -64,10 +64,10 @@ enum PhotoMealRecognizer {
 
     /// Typische Portionsgrößen als Referenz im Prompt
     private static let portionHints = """
-    Typische Portionsgrößen (nur als Referenz wenn Foto unklar):
-    Döner Kebab 380g · Chicken Nugget (1 Stück) 17g · Pommes Frites 150g · \
-    Pizza (1 Stück) 120g · Burger 200g · Schnitzel 180g · Hähnchenbrust gebraten 150g · \
-    Pasta (Portion) 220g · Reis (Beilage) 150g · Brötchen 55g · Brot (Scheibe) 40g · \
+    Typische Portionsgrößen (Referenz):
+    Döner im Fladenbrot 380g · Chicken Nugget (1 Stück) 17g · Pommes Frites (Portion) 120g · \
+    Pizza (1 Stück) 120g · Burger (generisch) 180g · Schnitzel 180g · Hähnchenbrust gebraten 150g · \
+    Pasta (Portion gekocht) 220g · Reis (Beilage gekocht) 150g · Brötchen 55g · Brot (Scheibe) 40g · \
     Ketchup 20g · Mayonnaise 15g · Apfel 150g · Banane 120g · Cola (Glas) 250ml · Kaffee 200ml
     """
 
@@ -152,8 +152,16 @@ enum PhotoMealRecognizer {
 
         \(portionHints)
 
-        Fastfood-Referenz (Standard-Portionsgrößen):
-        McNuggets 4er 68g · McNuggets 6er 102g · McNuggets 9er 153g · McNuggets 20er 340g · Big Mac 200g · McDouble 165g · Hamburger McDonald's 100g · Cheeseburger McDonald's 115g · McFish 143g · McRoyal 200g · McDonald's Pommes klein 80g · McDonald's Pommes mittel 135g · McDonald's Pommes groß 175g · McDonald's Curry Dip 30g · McDonald's BBQ Dip 30g · McDonald's Ketchup Dip 30g · McDonald's Senf Dip 30g · Whopper 270g · Junior Whopper 150g · BK Pommes mittel 128g · KFC Original (1 Stück) 120g · KFC Zinger Burger 200g · Subway 6-inch Sub 225g · Subway Footlong 450g · Döner im Fladenbrot 380g · Coca-Cola 0,3l 300ml · Coca-Cola 0,5l 500ml · Sprite 0,3l 300ml · Fanta 0,3l 300ml
+        Fastfood-Referenz — verwende AUSSCHLIESSLICH diese Werte, nicht dein eigenes Training:
+        McDonald's Big Mac 214g · McDouble 165g · Hamburger 105g · Cheeseburger 120g · McFish 136g · McRoyal 198g · McChicken 150g
+        McDonald's McNuggets 4er 68g · 6er 102g · 9er 153g · 20er 340g
+        McDonald's Pommes klein 80g · mittel 115g · groß 154g
+        McDonald's Dips (Curry / BBQ / Ketchup / Senf / Sweet Chili) je 25g
+        Burger King Whopper 291g · Junior Whopper 155g · Cheeseburger BK 118g · BK Pommes mittel 115g · BK Pommes groß 154g
+        KFC Original Recipe (1 Stück) 115g · Zinger Burger 205g · KFC Pommes mittel 100g
+        Subway 6-inch Sub 230g · Footlong 460g
+        Döner im Fladenbrot 380g · Döner in der Box 300g
+        Coca-Cola 0,25l 250ml · 0,3l 300ml · 0,4l 400ml · 0,5l 500ml · Sprite / Fanta gleiche Größen
 
         Schätze außerdem die Nährwerte pro 100g für jedes Lebensmittel.
 
