@@ -9,7 +9,7 @@ struct OptionalFeaturesView: View {
     @AppStorage("feature.calorieCarryover") private var carryoverEnabled        = false
 
     @AppStorage("geminiApiKey")   private var geminiApiKey   = ""
-    @AppStorage("geminiModelID")  private var geminiModelID  = "gemini-2.5-flash"
+    @AppStorage("geminiModelID")  private var geminiModelID  = "gemini-3-flash-preview"
 
     @State private var apiKeyVisible = false
 
@@ -76,7 +76,7 @@ struct OptionalFeaturesView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(.body, design: .monospaced))
-                        Text("Standard: gemini-2.5-flash — in AI Studio prüfen welches Modell du nutzt")
+                        Text("Standard: gemini-3-flash-preview — in AI Studio prüfen welches Modell du nutzt")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

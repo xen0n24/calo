@@ -23,7 +23,7 @@ enum PhotoMealRecognizer {
     }
 
     static var modelID: String {
-        UserDefaults.standard.string(forKey: "geminiModelID") ?? "gemini-2.5-flash"
+        UserDefaults.standard.string(forKey: "geminiModelID") ?? "gemini-3-flash-preview"
     }
 
     static var isAvailable: Bool { !apiKey.isEmpty }
@@ -79,7 +79,6 @@ enum PhotoMealRecognizer {
                 ]
             ]],
             "generationConfig": [
-                "responseMimeType": "application/json",
                 "temperature": 0.2
             ]
         ]
