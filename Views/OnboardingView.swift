@@ -6,7 +6,8 @@ import SwiftData
 struct OnboardingView: View {
     @Environment(AppTheme.self)  private var theme
     @Environment(\.modelContext) private var modelContext
-    @State private var step = 0
+    @State private var step        = 0
+    @State private var goingBack   = false
 
     // Eingabewerte
     @State private var sex: Sex = .male
@@ -40,8 +41,8 @@ struct OnboardingView: View {
                 stepContent
                     .id(step)           // erzwingt View-Neubau → Transition greift
                     .transition(.asymmetric(
-                        insertion: .move(edge: .trailing).combined(with: .opacity),
-                        removal:   .move(edge: .leading).combined(with: .opacity)
+                        insertion: .move(edge: goingBack ? .leading  : .trailing).combined(with: .opacity),
+                        removal:   .move(edge: goingBack ? .trailing : .leading ).combined(with: .opacity)
                     ))
 
                 Spacer()
@@ -77,7 +78,8 @@ struct OnboardingView: View {
             if step > 0 {
                 Button {
                     HapticManager.impact(.light)
-                    withAnimation(.easeInOut(duration: 0.25)) { step -= 1 }
+                    goingBack = true
+                    withAnimation(.easeInOut(duration: 0.25)) { step = max(0, step - 1) }
                 } label: {
                     Label("Zurück", systemImage: "chevron.left")
                 }
@@ -89,7 +91,8 @@ struct OnboardingView: View {
             if step < totalSteps - 1 {
                 Button {
                     HapticManager.impact(.medium)
-                    withAnimation(.easeInOut(duration: 0.25)) { step += 1 }
+                    goingBack = false
+                    withAnimation(.easeInOut(duration: 0.25)) { step = min(totalSteps - 1, step + 1) }
                 } label: {
                     Text("Weiter")
                         .fontWeight(.semibold)
