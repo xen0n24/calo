@@ -106,89 +106,72 @@ struct PhotoMealSheet: View {
     // MARK: - Source
 
     private var sourceView: some View {
-        ZStack {
-            // Subtiler Hintergrund-Gradient
-            LinearGradient(
-                colors: [Color.green.opacity(0.15), Color.blue.opacity(0.06), Color.clear],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+        VStack(spacing: 32) {
+            Spacer()
+
+            VStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.green)
+                Text("Mahlzeit per KI erfassen")
+                    .font(.title3.bold())
+                Text("Foto, Mediathek oder Freitext")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
 
             VStack(spacing: 0) {
-                Spacer()
-
-                // Hero
-                VStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(.green.opacity(0.12))
-                            .frame(width: 90, height: 90)
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 44, weight: .light))
-                            .foregroundStyle(
-                                LinearGradient(colors: [.green, .mint],
-                                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                            )
-                            .symbolEffect(.variableColor.iterative.dimInactiveLayers)
-                    }
-                    VStack(spacing: 6) {
-                        Text("KI-Erkennung")
-                            .font(.title.bold())
-                        Text("Wie möchtest du deine Mahlzeit erfassen?")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
+                Button { Task { await requestCameraForPhoto() } } label: {
+                    kiOptionRow(icon: "camera.fill", color: .green,
+                                title: "Foto aufnehmen",
+                                desc: "KI erkennt Lebensmittel & Portionen")
                 }
-                .padding(.bottom, 40)
+                .buttonStyle(.plain)
 
-                // Optionen
-                VStack(spacing: 10) {
-                    Button { Task { await requestCameraForPhoto() } } label: {
-                        aiOptionRow(icon: "camera.fill", color: .green,
-                                    title: "Foto aufnehmen",
-                                    desc: "KI erkennt Lebensmittel & Portionen automatisch")
-                    }
-                    .buttonStyle(.plain)
+                Divider().padding(.leading, 58)
 
-                    PhotosPicker(selection: $photosPickerItem, matching: .images) {
-                        aiOptionRow(icon: "photo.stack.fill", color: .blue,
-                                    title: "Aus Mediathek",
-                                    desc: "Vorhandenes Foto analysieren lassen")
-                    }
-
-                    Button { showTextInput = true } label: {
-                        aiOptionRow(icon: "text.bubble.fill", color: .purple,
-                                    title: "Text eingeben",
-                                    desc: "Freitext – auch Fastfood & Markennamen")
-                    }
-                    .buttonStyle(.plain)
+                PhotosPicker(selection: $photosPickerItem, matching: .images) {
+                    kiOptionRow(icon: "photo.stack.fill", color: .blue,
+                                title: "Aus Mediathek",
+                                desc: "Vorhandenes Foto analysieren")
                 }
-                .padding(.horizontal, 20)
 
-                Spacer()
+                Divider().padding(.leading, 58)
 
-                Text("KI-Schätzung — Mengen bitte immer prüfen")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .padding(.bottom, 12)
+                Button { showTextInput = true } label: {
+                    kiOptionRow(icon: "text.bubble.fill", color: .purple,
+                                title: "Text eingeben",
+                                desc: "Freitext – auch Fastfood & Markennamen")
+                }
+                .buttonStyle(.plain)
             }
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal)
+
+            Spacer()
+            Spacer()
+
+            Text("KI-Schätzung: Mengen immer überprüfen!")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.bottom)
         }
     }
 
-    private func aiOptionRow(icon: String, color: Color, title: String, desc: String) -> some View {
+    private func kiOptionRow(icon: String, color: Color, title: String, desc: String) -> some View {
         HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 8)
                     .fill(color.opacity(0.15))
-                    .frame(width: 50, height: 50)
+                    .frame(width: 36, height: 36)
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .medium))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(color)
             }
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.body.weight(.semibold))
+                    .font(.body)
                     .foregroundStyle(.primary)
                 Text(desc)
                     .font(.caption)
@@ -196,12 +179,11 @@ struct PhotoMealSheet: View {
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.quaternary)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .glassEffect(in: RoundedRectangle(cornerRadius: 18))
+        .padding(.vertical, 13)
     }
 
     // MARK: - Text Input
@@ -212,7 +194,7 @@ struct PhotoMealSheet: View {
                 Spacer().frame(height: 8)
                 Image(systemName: "text.bubble.fill")
                     .font(.system(size: 48))
-                    .foregroundStyle(.green.opacity(0.8))
+                    .foregroundStyle(.green)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Was hast du gegessen?")
