@@ -8,8 +8,7 @@ struct OptionalFeaturesView: View {
     @AppStorage("feature.microNutrients")   private var microNutrientsEnabled   = false
     @AppStorage("feature.calorieCarryover") private var carryoverEnabled        = false
 
-    @AppStorage("geminiApiKey")   private var geminiApiKey   = ""
-    @AppStorage("geminiModelID")  private var geminiModelID  = "gemini-3-flash-preview"
+    @AppStorage("geminiApiKey") private var geminiApiKey = ""
 
     @State private var apiKeyVisible = false
 
@@ -68,19 +67,6 @@ struct OptionalFeaturesView: View {
                     }
                     .padding(.vertical, 4)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Modell")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        TextField("Modell-ID", text: $geminiModelID)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .font(.system(.body, design: .monospaced))
-                        Text("Standard: gemini-3-flash-preview — in AI Studio prüfen welches Modell du nutzt")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 4)
                 }
             }
 

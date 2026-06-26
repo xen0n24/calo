@@ -22,9 +22,7 @@ enum PhotoMealRecognizer {
         get { UserDefaults.standard.string(forKey: "geminiApiKey") ?? "" }
     }
 
-    static var modelID: String {
-        UserDefaults.standard.string(forKey: "geminiModelID") ?? "gemini-3-flash-preview"
-    }
+    static let modelID = "gemini-3-flash-preview"
 
     static var isAvailable: Bool { !apiKey.isEmpty }
 
