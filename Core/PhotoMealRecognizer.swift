@@ -142,22 +142,18 @@ enum PhotoMealRecognizer {
         Du bist ein Ernährungs-Experte. Der Nutzer hat folgende Mahlzeit beschrieben:
         „\(description)"
 
-        Erschließe daraus:
-        1. Welche konkreten Lebensmittel/Gerichte gegessen wurden
-        2. Typische Portionsgrößen — bei bekannten Ketten die offiziellen Standardportionen verwenden
-        3. Wenn ein Kontext erkennbar ist (McDonald's, Burger King, KFC, Subway, Nordsee, Vapiano usw.) → produktspezifische Markennamen behalten (z.B. „Big Mac", „Coca-Cola", „McDonald's Curry Dip")
+        WICHTIGSTE REGEL: Erfasse NUR Lebensmittel, die explizit genannt werden. Ergänze KEINE Beilagen, Getränke oder weitere Produkte, die nicht erwähnt wurden. Wenn jemand nur „Big Mac" schreibt, gibt es nur einen Eintrag: Big Mac. Keine Pommes, keine Cola.
+
+        Für die genannten Lebensmittel:
+        1. Typische Portionsgrößen verwenden — bei bekannten Ketten die offiziellen Standardportionen
+        2. Wenn ein Kontext erkennbar ist (McDonald's, Burger King, KFC, Subway usw.) → produktspezifische Markennamen behalten
+        3. Soßen und Dips die explizit erwähnt werden → als eigenen Eintrag
+        4. Getränke die explizit erwähnt werden → als eigenen Eintrag
 
         \(portionHints)
 
         Fastfood-Referenz (Standard-Portionsgrößen):
         McNuggets 4er 68g · McNuggets 6er 102g · McNuggets 9er 153g · McNuggets 20er 340g · Big Mac 200g · McDouble 165g · Hamburger McDonald's 100g · Cheeseburger McDonald's 115g · McFish 143g · McRoyal 200g · McDonald's Pommes klein 80g · McDonald's Pommes mittel 135g · McDonald's Pommes groß 175g · McDonald's Curry Dip 30g · McDonald's BBQ Dip 30g · McDonald's Ketchup Dip 30g · McDonald's Senf Dip 30g · Whopper 270g · Junior Whopper 150g · BK Pommes mittel 128g · KFC Original (1 Stück) 120g · KFC Zinger Burger 200g · Subway 6-inch Sub 225g · Subway Footlong 450g · Döner im Fladenbrot 380g · Coca-Cola 0,3l 300ml · Coca-Cola 0,5l 500ml · Sprite 0,3l 300ml · Fanta 0,3l 300ml
-
-        Regeln:
-        - Soßen und Dips IMMER als eigenen Eintrag
-        - Getränke als eigenen Eintrag
-        - Mengen aus der Beschreibung ableiten (z.B. „6er McNuggets" = 102g, „großes Menü Pommes" = 175g)
-        - Bei unklaren Mengen Standardportion verwenden
-        - Jede Komponente eines Menüs einzeln listen
 
         Schätze außerdem die Nährwerte pro 100g für jedes Lebensmittel.
 
