@@ -367,6 +367,7 @@ struct PhotoMealSheet: View {
         editingItemID = nil
     }
 
+    @MainActor
     private func loadPhoto(item: PhotosPickerItem) async {
         guard let data  = try? await item.loadTransferable(type: Data.self),
               let image = UIImage(data: data) else { return }

@@ -71,7 +71,8 @@ enum PhotoMealRecognizer {
         Regeln für die Einteilung:
         - Bekannte Gerichte mit eigenem Namen (Pizza, Burger, Döner, Schnitzel, Pasta, Sushi, Kebab usw.) → als EINEN Eintrag mit dem Gerichtnamen
         - Selbst zubereitete Mahlzeiten oder Teller mit mehreren sichtbaren Komponenten (z.B. Hähnchen + Reis + Gemüse) → jede Komponente EINZELN
-        - Getränke, Soßen und Beilagen separat wenn sichtbar
+        - Soßen, Dips und Dressings IMMER als eigenen Eintrag (z.B. Ketchup, Mayonnaise, BBQ-Soße, Salatdressing) — auch wenn nur ein kleiner Klecks sichtbar ist
+        - Getränke und Beilagen separat wenn sichtbar
         - Mengen realistisch in Gramm schätzen (typische Portionsgrößen)
 
         Antworte ausschließlich als JSON ohne weitere Erklärungen:
