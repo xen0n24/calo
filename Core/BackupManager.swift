@@ -309,10 +309,9 @@ enum BackupManager {
 
     // MARK: - Import
 
-    static func importBackup(from url: URL, context: ModelContext) throws -> BackupImportResult {
+    static func importBackup(from data: Data, context: ModelContext) throws -> BackupImportResult {
         var result = BackupImportResult()
 
-        let data    = try Data(contentsOf: url)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let backup  = try decoder.decode(BackupV1.self, from: data)

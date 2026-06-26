@@ -219,9 +219,12 @@ struct ProfileView: View {
                 .sheet(item: $shareURL) { s in ActivityView(url: s.url) }
                 .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
                     if case .success(let url) = result {
+                        // Security-Scope öffnen und Daten INNERHALB der closure lesen —
+                        // defer würde den Scope freigeben bevor der async Task die Datei liest.
                         let accessed = url.startAccessingSecurityScopedResource()
-                        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                        Task { await performImport(from: url) }
+                        let data = try? Data(contentsOf: url)
+                        if accessed { url.stopAccessingSecurityScopedResource() }
+                        Task { await performImport(data: data) }
                     }
                 }
                 .confirmationDialog(
@@ -353,11 +356,16 @@ struct ProfileView: View {
         isExporting = false
     }
 
-    private func performImport(from url: URL) async {
-        if let r = try? BackupManager.importBackup(from: url, context: modelContext) {
+    private func performImport(data: Data?) async {
+        guard let data else {
+            importResult = "Import fehlgeschlagen: Datei konnte nicht gelesen werden."
+            return
+        }
+        do {
+            let r = try BackupManager.importBackup(from: data, context: modelContext)
             importResult = r.summary
-        } else {
-            importResult = "Import fehlgeschlagen."
+        } catch {
+            importResult = "Import fehlgeschlagen: \(error.localizedDescription)"
         }
     }
 
