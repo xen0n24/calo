@@ -30,36 +30,65 @@ struct MainTabView: View {
 
 // MARK: - UIKit Haptic Installer
 
-/// Unsichtbarer UIViewController, der einen Pan-Gesture-Recognizer auf der
-/// nativen UITabBar installiert – ohne deren Aussehen zu verändern.
-private struct TabBarHapticInstaller: UIViewControllerRepresentable {
+private struct TabBarHapticInstaller: UIViewRepresentable {
     let itemCount: Int
 
     func makeCoordinator() -> HapticGestureHandler {
         HapticGestureHandler(itemCount: itemCount)
     }
 
-    func makeUIViewController(context: Context) -> InstallerVC {
-        InstallerVC(handler: context.coordinator)
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        view.isHidden = true
+        scheduleInstall(from: view, handler: context.coordinator)
+        return view
     }
 
-    func updateUIViewController(_ vc: InstallerVC, context: Context) {}
+    func updateUIView(_ uiView: UIView, context: Context) {}
+
+    private func scheduleInstall(from view: UIView, handler: HapticGestureHandler, attempt: Int = 0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            guard !handler.installed else { return }
+            if let window = view.window, let tabBar = findTabBar(in: window) {
+                let pan = UIPanGestureRecognizer(
+                    target: handler,
+                    action: #selector(HapticGestureHandler.handlePan(_:))
+                )
+                pan.delegate             = handler
+                pan.cancelsTouchesInView = false
+                pan.delaysTouchesBegan   = false
+                pan.delaysTouchesEnded   = false
+                tabBar.addGestureRecognizer(pan)
+                handler.installed = true
+            } else if attempt < 10 {
+                scheduleInstall(from: view, handler: handler, attempt: attempt + 1)
+            }
+        }
+    }
+
+    private func findTabBar(in view: UIView) -> UITabBar? {
+        if let tabBar = view as? UITabBar { return tabBar }
+        for sub in view.subviews {
+            if let found = findTabBar(in: sub) { return found }
+        }
+        return nil
+    }
 }
 
-// MARK: Gesture handler
+// MARK: - Gesture handler
 
-private final class HapticGestureHandler: NSObject, UIGestureRecognizerDelegate {
+final class HapticGestureHandler: NSObject, UIGestureRecognizerDelegate {
     let itemCount: Int
+    var installed = false
     private var lastIdx = -1
 
-    init(itemCount: Int) {
-        self.itemCount = itemCount
-    }
+    init(itemCount: Int) { self.itemCount = itemCount }
 
     @objc func handlePan(_ gr: UIPanGestureRecognizer) {
         guard let view = gr.view else { return }
         switch gr.state {
-        case .changed:
+        case .began, .changed:
             let x   = gr.location(in: view).x
             let w   = view.bounds.width / CGFloat(itemCount)
             let idx = min(itemCount - 1, max(0, Int(x / w)))
@@ -74,53 +103,10 @@ private final class HapticGestureHandler: NSObject, UIGestureRecognizerDelegate 
         }
     }
 
-    // Gleichzeitige Erkennung mit nativer Tab-Bar-Geste erlauben
     func gestureRecognizer(_ gr: UIGestureRecognizer,
                            shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
-
     func gestureRecognizer(_ gr: UIGestureRecognizer,
                            shouldRequireFailureOf other: UIGestureRecognizer) -> Bool { false }
-
     func gestureRecognizer(_ gr: UIGestureRecognizer,
                            shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool { false }
-}
-
-// MARK: Installer view controller
-
-private final class InstallerVC: UIViewController {
-    private let handler: HapticGestureHandler
-    private var installed = false
-
-    init(handler: HapticGestureHandler) {
-        self.handler = handler
-        super.init(nibName: nil, bundle: nil)
-    }
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        guard !installed else { return }
-        installGesture()
-    }
-
-    private func installGesture() {
-        // Responder-Chain nach oben laufen bis UITabBarController gefunden
-        var responder: UIResponder? = self
-        while let r = responder {
-            if let tbc = r as? UITabBarController {
-                let pan = UIPanGestureRecognizer(
-                    target: handler,
-                    action: #selector(HapticGestureHandler.handlePan(_:))
-                )
-                pan.delegate                = handler
-                pan.cancelsTouchesInView    = false
-                pan.delaysTouchesBegan      = false
-                pan.delaysTouchesEnded      = false
-                tbc.tabBar.addGestureRecognizer(pan)
-                installed = true
-                return
-            }
-            responder = r.next
-        }
-    }
 }
