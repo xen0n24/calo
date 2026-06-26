@@ -42,13 +42,16 @@ struct PhotoMealSheet: View {
     @State private var adjustmentPrompt:  String           = ""
     @State private var showAddItem                          = false
     @State private var addItemPrompt:     String           = ""
+    @State private var showTextInput                        = false
+    @State private var mealDescription:   String           = ""
 
-    private enum ViewPhase { case source, comment, analyzing, confirm, error }
+    private enum ViewPhase { case source, textInput, comment, analyzing, confirm, error }
     private var phase: ViewPhase {
         if isAnalyzing          { return .analyzing }
         if errorMessage != nil  { return .error }
         if analysisComplete     { return .confirm }
         if capturedImage != nil { return .comment }
+        if showTextInput        { return .textInput }
         return .source
     }
 
@@ -63,13 +66,14 @@ struct PhotoMealSheet: View {
             Group {
                 switch phase {
                 case .source:    sourceView
+                case .textInput: textInputView
                 case .comment:   commentView
                 case .analyzing: analyzingView
                 case .confirm:   confirmView
                 case .error:     errorView
                 }
             }
-            .navigationTitle("Mahlzeit per Foto")
+            .navigationTitle("Mahlzeit per KI")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -122,9 +126,64 @@ struct PhotoMealSheet: View {
                         .background(Color(.systemGray5))
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
+                Button { showTextInput = true } label: {
+                    Label("Text eingeben", systemImage: "text.cursor")
+                        .frame(maxWidth: .infinity).padding()
+                        .background(Color(.systemGray5))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
             }
             .padding(.horizontal)
             Spacer(); Spacer()
+        }
+    }
+
+    // MARK: - Text Input
+
+    private var textInputView: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                Spacer().frame(height: 8)
+                Image(systemName: "text.bubble.fill")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.green.opacity(0.8))
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Was hast du gegessen?")
+                        .font(.headline)
+                    Text("Beschreibe deine Mahlzeit frei – die KI erschließt Portionen, Fastfood-Standardgrößen und Markennamen.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    TextField("z. B. '6er McNuggets, Big Mac, Curry Dip und ne Cola'",
+                              text: $mealDescription, axis: .vertical)
+                        .lineLimit(5, reservesSpace: true)
+                        .padding(10)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+
+                let trimmed = mealDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+                Button {
+                    guard !trimmed.isEmpty else { return }
+                    Task { await analyzeText(description: trimmed) }
+                } label: {
+                    Label("Analysieren", systemImage: "sparkles")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity).padding()
+                        .background(trimmed.isEmpty ? Color.gray : Color.green)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .disabled(trimmed.isEmpty)
+
+                Button {
+                    showTextInput   = false
+                    mealDescription = ""
+                } label: {
+                    Text("Zurück")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            .padding()
         }
     }
 
@@ -429,6 +488,7 @@ struct PhotoMealSheet: View {
                 expandedGramsID = nil
                 showAdjustment = false; adjustmentPrompt = ""
                 showAddItem = false; addItemPrompt = ""
+                showTextInput = false; mealDescription = ""
             }
             .buttonStyle(.borderedProminent)
             Spacer(); Spacer()
@@ -499,27 +559,58 @@ struct PhotoMealSheet: View {
             .first
     }
 
+    /// Text-basierte Analyse (ohne Foto).
+    @MainActor
+    private func analyzeText(description: String) async {
+        isAnalyzing = true; errorMessage = nil
+        do {
+            let result     = try await PhotoMealRecognizer.recognizeFromText(description)
+            detectedLabels = result.detectedLabels
+            var seen       = Set<PersistentIdentifier>()
+            draftItems     = result.items.compactMap { item -> DraftItem? in
+                let food    = matchOrCreate(item: item)
+                guard seen.insert(food.persistentModelID).inserted else { return nil }
+                let snapped = max(5.0, (Double(item.estimatedGrams) / 5.0).rounded() * 5.0)
+                return DraftItem(name: item.name, grams: snapped, matchedFood: food)
+            }
+            showLabels       = draftItems.isEmpty
+            analysisComplete = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isAnalyzing = false
+    }
+
     /// Analyse mit neuem Kommentar wiederholen (alle Einträge werden ersetzt).
     @MainActor
     private func reanalyze(comment: String) async {
-        guard let image = capturedImage else { return }
         showAdjustment   = false
         adjustmentPrompt = ""
         draftItems       = []
         detectedLabels   = []
         analysisComplete = false
         expandedGramsID  = nil
-        await analyze(image: image, comment: comment)
+        if let image = capturedImage {
+            await analyze(image: image, comment: comment)
+        } else {
+            let combined = mealDescription + "\nAnpassung: " + comment
+            await analyzeText(description: combined)
+        }
     }
 
     /// Einzelnes Lebensmittel per Beschreibung per KI hinzufügen (bestehende Liste bleibt).
     @MainActor
     private func addItemViaAI(description: String) async {
-        guard let image = capturedImage else { return }
         showAddItem = false
         isAnalyzing = true
         do {
-            let result      = try await PhotoMealRecognizer.recognizeSingle(image: image, description: description)
+            let result: RecognitionResult
+            if let image = capturedImage {
+                result = try await PhotoMealRecognizer.recognizeSingle(image: image, description: description)
+            } else {
+                result = try await PhotoMealRecognizer.recognizeSingleFromText(
+                    existingDescription: mealDescription, addition: description)
+            }
             var existingIDs = Set(draftItems.compactMap { $0.matchedFood?.persistentModelID })
             for item in result.items {
                 let food    = matchOrCreate(item: item)

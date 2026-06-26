@@ -133,20 +133,82 @@ enum PhotoMealRecognizer {
         return RecognitionResult(items: items, detectedLabels: items.map { $0.name })
     }
 
+    // MARK: - Text-basierte Mahlzeitanalyse (ohne Foto)
+
+    static func recognizeFromText(_ description: String) async throws -> RecognitionResult {
+        guard isAvailable else { throw RecognizerError.noApiKey }
+
+        let prompt = """
+        Du bist ein Ernährungs-Experte. Der Nutzer hat folgende Mahlzeit beschrieben:
+        „\(description)"
+
+        Erschließe daraus:
+        1. Welche konkreten Lebensmittel/Gerichte gegessen wurden
+        2. Typische Portionsgrößen — bei bekannten Ketten die offiziellen Standardportionen verwenden
+        3. Wenn ein Kontext erkennbar ist (McDonald's, Burger King, KFC, Subway, Nordsee, Vapiano usw.) → produktspezifische Markennamen behalten (z.B. „Big Mac", „Coca-Cola", „McDonald's Curry Dip")
+
+        \(portionHints)
+
+        Fastfood-Referenz (Standard-Portionsgrößen):
+        McNuggets 4er 68g · McNuggets 6er 102g · McNuggets 9er 153g · McNuggets 20er 340g · Big Mac 200g · McDouble 165g · Hamburger McDonald's 100g · Cheeseburger McDonald's 115g · McFish 143g · McRoyal 200g · McDonald's Pommes klein 80g · McDonald's Pommes mittel 135g · McDonald's Pommes groß 175g · McDonald's Curry Dip 30g · McDonald's BBQ Dip 30g · McDonald's Ketchup Dip 30g · McDonald's Senf Dip 30g · Whopper 270g · Junior Whopper 150g · BK Pommes mittel 128g · KFC Original (1 Stück) 120g · KFC Zinger Burger 200g · Subway 6-inch Sub 225g · Subway Footlong 450g · Döner im Fladenbrot 380g · Coca-Cola 0,3l 300ml · Coca-Cola 0,5l 500ml · Sprite 0,3l 300ml · Fanta 0,3l 300ml
+
+        Regeln:
+        - Soßen und Dips IMMER als eigenen Eintrag
+        - Getränke als eigenen Eintrag
+        - Mengen aus der Beschreibung ableiten (z.B. „6er McNuggets" = 102g, „großes Menü Pommes" = 175g)
+        - Bei unklaren Mengen Standardportion verwenden
+        - Jede Komponente eines Menüs einzeln listen
+
+        Schätze außerdem die Nährwerte pro 100g für jedes Lebensmittel.
+
+        Antworte ausschließlich als JSON ohne weitere Erklärungen:
+        \(jsonFormat)
+        Markennamen beibehalten (Big Mac, Coca-Cola, Whopper usw.). Sonstige Namen auf Deutsch. Nährwerte als Zahlen ohne Einheit.
+        """
+
+        let itemsArray = try await callGemini(prompt: prompt, base64: nil)
+        let items      = parseItems(from: itemsArray)
+        guard !items.isEmpty else { throw RecognizerError.noItemsDetected }
+        return RecognitionResult(items: items, detectedLabels: items.map { $0.name })
+    }
+
+    // MARK: - Einzeleintrag per Text hinzufügen (ohne Foto)
+
+    static func recognizeSingleFromText(existingDescription: String, addition: String) async throws -> RecognitionResult {
+        guard isAvailable else { throw RecognizerError.noApiKey }
+
+        let prompt = """
+        Du bist ein Ernährungs-Experte. Kontext: Der Nutzer hat „\(existingDescription)" gegessen.
+        Füge NUR dieses zusätzliche Element hinzu: „\(addition)"
+
+        \(portionHints)
+
+        Schätze Menge und Nährwerte pro 100g für genau dieses eine Element. Markennamen wenn erkennbar beibehalten.
+
+        Antworte ausschließlich als JSON ohne weitere Erklärungen:
+        \(jsonFormat)
+        Nährwerte als Zahlen ohne Einheit.
+        """
+
+        let itemsArray = try await callGemini(prompt: prompt, base64: nil)
+        let items      = parseItems(from: itemsArray)
+        guard !items.isEmpty else { throw RecognizerError.noItemsDetected }
+        return RecognitionResult(items: items, detectedLabels: items.map { $0.name })
+    }
+
     // MARK: - Private Helpers
 
     private static func imageBase64(_ image: UIImage) -> String? {
         resized(image, maxSide: 1024).jpegData(compressionQuality: 0.5)?.base64EncodedString()
     }
 
-    private static func callGemini(prompt: String, base64: String) async throws -> [[String: Any]] {
+    private static func callGemini(prompt: String, base64: String?) async throws -> [[String: Any]] {
+        var parts: [[String: Any]] = [["text": prompt]]
+        if let b64 = base64 {
+            parts.append(["inline_data": ["mime_type": "image/jpeg", "data": b64]])
+        }
         let body: [String: Any] = [
-            "contents": [[
-                "parts": [
-                    ["text": prompt],
-                    ["inline_data": ["mime_type": "image/jpeg", "data": base64]]
-                ]
-            ]],
+            "contents": [["parts": parts]],
             "generationConfig": ["temperature": 0.2]
         ]
 
