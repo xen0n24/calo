@@ -53,7 +53,7 @@ enum PhotoMealRecognizer {
 
     // MARK: Main entry point
 
-    static func recognize(image: UIImage) async throws -> RecognitionResult {
+    static func recognize(image: UIImage, comment: String = "") async throws -> RecognitionResult {
         guard isAvailable else { throw RecognizerError.noApiKey }
 
         guard let jpegData = resized(image, maxSide: 1024).jpegData(compressionQuality: 0.5) else {
@@ -61,12 +61,22 @@ enum PhotoMealRecognizer {
         }
         let base64 = jpegData.base64EncodedString()
 
+        let commentLine = comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? ""
+            : "\nZusatzinfo vom Nutzer: \(comment.trimmingCharacters(in: .whitespacesAndNewlines))"
+
         let prompt = """
-        Analysiere dieses Foto einer Mahlzeit als Ernährungs-Experte.
-        Erkenne alle sichtbaren Lebensmittel und schätze die Mengen realistisch in Gramm.
+        Du bist ein Ernährungs-Experte. Analysiere dieses Foto einer Mahlzeit.\(commentLine)
+
+        Regeln für die Einteilung:
+        - Bekannte Gerichte mit eigenem Namen (Pizza, Burger, Döner, Schnitzel, Pasta, Sushi, Kebab usw.) → als EINEN Eintrag mit dem Gerichtnamen
+        - Selbst zubereitete Mahlzeiten oder Teller mit mehreren sichtbaren Komponenten (z.B. Hähnchen + Reis + Gemüse) → jede Komponente EINZELN
+        - Getränke, Soßen und Beilagen separat wenn sichtbar
+        - Mengen realistisch in Gramm schätzen (typische Portionsgrößen)
+
         Antworte ausschließlich als JSON ohne weitere Erklärungen:
-        {"items":[{"name":"Hähnchenbrust","estimatedGrams":150},{"name":"Reis","estimatedGrams":200}]}
-        Lebensmittelnamen immer auf Deutsch.
+        {"items":[{"name":"Pizza Margherita","estimatedGrams":350}]}
+        Alle Namen auf Deutsch.
         """
 
         let body: [String: Any] = [

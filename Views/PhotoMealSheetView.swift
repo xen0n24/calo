@@ -35,12 +35,15 @@ struct PhotoMealSheet: View {
     @State private var pickerInitialSearch: String          = ""
     @State private var detectedLabels:    [String]          = []
     @State private var showLabels                           = false
+    @State private var userComment:       String            = ""
+    @State private var analysisComplete                     = false
 
-    private enum ViewPhase { case source, analyzing, confirm, error }
+    private enum ViewPhase { case source, comment, analyzing, confirm, error }
     private var phase: ViewPhase {
         if isAnalyzing          { return .analyzing }
         if errorMessage != nil  { return .error }
-        if capturedImage != nil { return .confirm }
+        if analysisComplete     { return .confirm }
+        if capturedImage != nil { return .comment }
         return .source
     }
 
@@ -55,6 +58,7 @@ struct PhotoMealSheet: View {
             Group {
                 switch phase {
                 case .source:    sourceView
+                case .comment:   commentView
                 case .analyzing: analyzingView
                 case .confirm:   confirmView
                 case .error:     errorView
@@ -70,7 +74,7 @@ struct PhotoMealSheet: View {
         }
         .onChange(of: photosPickerItem) { _, item in
             guard let item else { return }
-            Task { await loadAndAnalyze(item: item) }
+            Task { await loadPhoto(item: item) }
         }
         .alert("Kamerazugriff verweigert", isPresented: $showCameraPermissionAlert) {
             Button("OK", role: .cancel) {}
@@ -79,7 +83,7 @@ struct PhotoMealSheet: View {
         }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPickerView(isPresented: $showCamera) { image in
-                Task { await analyze(image: image) }
+                capturedImage = image
             }
         }
         .sheet(isPresented: $showFoodPicker) {
@@ -116,6 +120,53 @@ struct PhotoMealSheet: View {
             }
             .padding(.horizontal)
             Spacer(); Spacer()
+        }
+    }
+
+    // MARK: - Comment
+
+    private var commentView: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                if let img = capturedImage {
+                    Image(uiImage: img)
+                        .resizable().scaledToFill()
+                        .frame(height: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 14)).clipped()
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Beschreibung (optional)")
+                        .font(.headline)
+                    Text("Hilft der KI bei schwer erkennbaren Gerichten oder Portionsgrößen.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    TextField("z. B. 'Schnitzel mit Pommes, große Portion'", text: $userComment, axis: .vertical)
+                        .lineLimit(3, reservesSpace: true)
+                        .padding(10)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+
+                Button {
+                    Task { await analyze(image: capturedImage!, comment: userComment) }
+                } label: {
+                    Label("Analysieren", systemImage: "sparkles")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity).padding()
+                        .background(Color.green).foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+
+                Button {
+                    capturedImage = nil
+                    userComment   = ""
+                    photosPickerItem = nil
+                } label: {
+                    Text("Anderes Foto wählen")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            .padding()
         }
     }
 
@@ -281,6 +332,7 @@ struct PhotoMealSheet: View {
             Button("Nochmal versuchen") {
                 capturedImage = nil; draftItems = []; errorMessage = nil
                 photosPickerItem = nil; detectedLabels = []
+                userComment = ""; analysisComplete = false
             }
             .buttonStyle(.borderedProminent)
             Spacer(); Spacer()
@@ -315,16 +367,16 @@ struct PhotoMealSheet: View {
         editingItemID = nil
     }
 
-    private func loadAndAnalyze(item: PhotosPickerItem) async {
+    private func loadPhoto(item: PhotosPickerItem) async {
         guard let data  = try? await item.loadTransferable(type: Data.self),
               let image = UIImage(data: data) else { return }
-        await analyze(image: image)
+        capturedImage = image
     }
 
-    private func analyze(image: UIImage) async {
-        capturedImage = image; isAnalyzing = true; errorMessage = nil
+    private func analyze(image: UIImage, comment: String = "") async {
+        isAnalyzing = true; errorMessage = nil
         do {
-            let result     = try await PhotoMealRecognizer.recognize(image: image)
+            let result     = try await PhotoMealRecognizer.recognize(image: image, comment: comment)
             detectedLabels = result.detectedLabels
             var seen       = Set<PersistentIdentifier>()
             draftItems     = result.items.compactMap { item -> DraftItem? in
@@ -332,7 +384,8 @@ struct PhotoMealSheet: View {
                       seen.insert(food.persistentModelID).inserted else { return nil }
                 return DraftItem(name: item.name, grams: Double(item.estimatedGrams), matchedFood: food)
             }
-            showLabels = draftItems.isEmpty
+            showLabels       = draftItems.isEmpty
+            analysisComplete = true
         } catch {
             errorMessage = error.localizedDescription
         }
