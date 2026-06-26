@@ -249,12 +249,13 @@ struct PhotoMealSheet: View {
 
     private var draftTotals: (kcal: Double, protein: Double, carbs: Double, fat: Double) {
         draftItems.reduce((0, 0, 0, 0)) { acc, item in
-            guard let food = item.matchedFood else { return acc }
+            guard let food = item.matchedFood,
+                  let n = food.nutritionPer100g else { return acc }
             let f = item.grams / 100.0
-            return (acc.0 + food.nutritionPer100g.kcal    * f,
-                    acc.1 + food.nutritionPer100g.protein  * f,
-                    acc.2 + food.nutritionPer100g.carbs    * f,
-                    acc.3 + food.nutritionPer100g.fat      * f)
+            return (acc.0 + n.kcal    * f,
+                    acc.1 + n.protein  * f,
+                    acc.2 + n.carbs    * f,
+                    acc.3 + n.fat      * f)
         }
     }
 
