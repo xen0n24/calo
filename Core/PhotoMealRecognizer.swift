@@ -1,35 +1,13 @@
 import Foundation
 import UIKit
-import Vision
-#if canImport(FoundationModels)
-import FoundationModels
-#endif
 
-// MARK: - Structured output types
+// MARK: - Types
 
-#if canImport(FoundationModels)
-@Generable
-struct FoodRecognitionResponse {
-    @Guide(description: "Erkannte Lebensmittel mit Mengenangaben in Gramm")
-    var items: [RecognizedFoodItem]
-}
-
-@Generable
 struct RecognizedFoodItem {
-    @Guide(description: "Lebensmittel-Name auf Deutsch, z.B. 'Hähnchenbrust'")
-    var name: String
-    @Guide(description: "Geschätzte Menge in Gramm")
+    var name:           String
     var estimatedGrams: Int
-    @Guide(description: "Konfidenz 0.0–1.0")
-    var confidence: Double
+    var confidence:     Double
 }
-#else
-struct RecognizedFoodItem {
-    var name: String
-    var estimatedGrams: Int
-    var confidence: Double
-}
-#endif
 
 struct RecognitionResult {
     let items:          [RecognizedFoodItem]
@@ -40,75 +18,132 @@ struct RecognitionResult {
 
 enum PhotoMealRecognizer {
 
+    static var apiKey: String {
+        get { UserDefaults.standard.string(forKey: "geminiApiKey") ?? "" }
+    }
+
+    static var modelID: String {
+        UserDefaults.standard.string(forKey: "geminiModelID") ?? "gemini-2.5-flash"
+    }
+
+    static var isAvailable: Bool { !apiKey.isEmpty }
+
+    // MARK: Errors
+
     enum RecognizerError: LocalizedError {
-        case modelUnavailable, visionFailed, noItemsDetected
+        case noApiKey
+        case imageFailed
+        case networkError(Int, String)
+        case parseFailed
+        case noItemsDetected
+
         var errorDescription: String? {
             switch self {
-            case .modelUnavailable: return "Apple Intelligence ist auf diesem Gerät nicht verfügbar."
-            case .visionFailed:     return "Bild konnte nicht verarbeitet werden."
-            case .noItemsDetected:  return "Keine Lebensmittel erkannt. Bitte manuell hinzufügen."
+            case .noApiKey:
+                return "Kein Gemini API-Key hinterlegt. Bitte in Profil → Optionale Features eintragen."
+            case .imageFailed:
+                return "Bild konnte nicht verarbeitet werden."
+            case .networkError(let code, let msg):
+                return "API-Fehler \(code): \(msg)"
+            case .parseFailed:
+                return "Antwort konnte nicht verarbeitet werden. Modell-ID prüfen."
+            case .noItemsDetected:
+                return "Keine Lebensmittel erkannt. Bitte manuell hinzufügen."
             }
         }
     }
 
-    static var isAvailable: Bool {
-        #if canImport(FoundationModels)
-        SystemLanguageModel.default.availability == .available
-        #else
-        false
-        #endif
-    }
-
-    #if canImport(FoundationModels)
-    // Zu generisch — verwirren FM mehr als sie helfen
-    private static let genericLabels: Set<String> = [
-        "food", "dish", "meal", "cuisine", "produce", "ingredient",
-        "vegetable", "fruit", "meat", "seafood", "dairy", "plant",
-        "plate", "bowl", "table", "fast food", "junk food", "snack food",
-        "natural foods", "whole food", "recipe", "staple food"
-    ]
-    #endif
+    // MARK: Main entry point
 
     static func recognize(image: UIImage) async throws -> RecognitionResult {
-        #if canImport(FoundationModels)
-        guard isAvailable else { throw RecognizerError.modelUnavailable }
+        guard isAvailable else { throw RecognizerError.noApiKey }
 
-        let visionLabels = try await classifyWithVision(image)
-        guard !visionLabels.isEmpty else { throw RecognizerError.visionFailed }
+        guard let jpegData = image.jpegData(compressionQuality: 0.75) else {
+            throw RecognizerError.imageFailed
+        }
+        let base64 = jpegData.base64EncodedString()
 
-        // Nur spezifische Labels ans FM — Top 8 reichen, kurzer Prompt = kein Overflow
-        let specific  = visionLabels.filter { !genericLabels.contains($0.name.lowercased()) }
-        let labelText = specific.prefix(8).map { $0.name }.joined(separator: ", ")
+        let prompt = """
+        Analysiere dieses Foto einer Mahlzeit als Ernährungs-Experte.
+        Erkenne alle sichtbaren Lebensmittel und schätze die Mengen realistisch in Gramm.
+        Antworte ausschließlich als JSON ohne weitere Erklärungen:
+        {"items":[{"name":"Hähnchenbrust","estimatedGrams":150},{"name":"Reis","estimatedGrams":200}]}
+        Lebensmittelnamen immer auf Deutsch.
+        """
 
-        let prompt       = "Vision-Labels: \(labelText). Lebensmittel auf Deutsch mit typischen Gramm-Mengen. Frittiertes als eigene Position. Farb-/Textur-Fehlklassifikationen korrigieren."
-        let instructions = "Ernährungs-Analyst. Lebensmittel aus Vision-Labels auf Deutsch identifizieren, realistische Portionsgrößen schätzen. Keine versteckten Zutaten."
+        let body: [String: Any] = [
+            "contents": [[
+                "parts": [
+                    ["text": prompt],
+                    ["inline_data": ["mime_type": "image/jpeg", "data": base64]]
+                ]
+            ]],
+            "generationConfig": [
+                "responseMimeType": "application/json",
+                "temperature": 0.2
+            ]
+        ]
 
-        let session  = LanguageModelSession(instructions: instructions)
-        let response = try await session.respond(to: prompt, generating: FoodRecognitionResponse.self)
+        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/\(modelID):generateContent?key=\(apiKey)"
+        guard let url = URL(string: urlString) else { throw RecognizerError.parseFailed }
 
-        let items = response.content.items
+        var request        = URLRequest(url: url, timeoutInterval: 30)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody   = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let statusCode       = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+        guard statusCode == 200 else {
+            let msg = String(data: data, encoding: .utf8)?.prefix(300) ?? "Unbekannter Fehler"
+            throw RecognizerError.networkError(statusCode, String(msg))
+        }
+
+        // Gemini-Antwort entpacken
+        guard
+            let json       = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let candidates = json["candidates"] as? [[String: Any]],
+            let content    = candidates.first?["content"] as? [String: Any],
+            let parts      = content["parts"] as? [[String: Any]],
+            let text       = parts.first?["text"] as? String
+        else { throw RecognizerError.parseFailed }
+
+        // JSON aus dem Text extrahieren (Markdown-Fences entfernen falls vorhanden)
+        let cleaned = extractJSON(from: text)
+
+        guard
+            let textData    = cleaned.data(using: .utf8),
+            let parsed      = try? JSONSerialization.jsonObject(with: textData) as? [String: Any],
+            let itemsArray  = parsed["items"] as? [[String: Any]]
+        else { throw RecognizerError.parseFailed }
+
+        let items: [RecognizedFoodItem] = itemsArray.compactMap { dict in
+            guard
+                let name  = dict["name"]           as? String,
+                let grams = dict["estimatedGrams"] as? Int
+            else { return nil }
+            return RecognizedFoodItem(name: name, estimatedGrams: grams, confidence: 0.9)
+        }
+
         guard !items.isEmpty else { throw RecognizerError.noItemsDetected }
 
-        return RecognitionResult(items: items, detectedLabels: visionLabels.map { $0.name })
-        #else
-        throw RecognizerError.modelUnavailable
-        #endif
+        return RecognitionResult(
+            items:          items,
+            detectedLabels: items.map { $0.name }
+        )
     }
 
-    // MARK: - Vision (immer verfügbar)
+    // MARK: Helpers
 
-    private struct LabelResult { let name: String; let confidence: Float }
-
-    private static func classifyWithVision(_ image: UIImage) async throws -> [LabelResult] {
-        guard let ciImage = CIImage(image: image) else { return [] }
-        return try await Task.detached(priority: .userInitiated) {
-            let request = VNClassifyImageRequest()
-            let handler = VNImageRequestHandler(ciImage: ciImage)
-            try handler.perform([request])
-            return (request.results ?? [])
-                .filter { $0.confidence > 0.10 }
-                .prefix(15)
-                .map { LabelResult(name: $0.identifier, confidence: $0.confidence) }
-        }.value
+    /// Entfernt optionale Markdown-Codeblöcke (```json ... ```)
+    private static func extractJSON(from text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("```") {
+            let lines  = trimmed.components(separatedBy: "\n")
+            let inner  = lines.dropFirst().dropLast().joined(separator: "\n")
+            return inner.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return trimmed
     }
 }
