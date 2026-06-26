@@ -225,7 +225,7 @@ struct SearchView: View {
                 ContentUnavailableView {
                     Label("Keine Ergebnisse", systemImage: "magnifyingglass")
                 } description: {
-                    Text("Kein Lebensmittel gefunden für „\(searchText)".")
+                    Text("Kein Lebensmittel gefunden für '\(searchText)'.")
                 }
                 .listRowBackground(Color.clear)
             }
