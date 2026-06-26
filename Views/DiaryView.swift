@@ -25,14 +25,7 @@ struct DiaryView: View {
                 ToolbarItem(placement: .principal) {
                     DateNavigatorBar(selectedDate: $selectedDate)
                 }
-                if photoRecognitionEnabled {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button { showPhotoMeal = true } label: {
-                            Image(systemName: "camera.viewfinder")
-                        }
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Menu {
                         Button {
                             copyEntries(fromDaysBefore: 1)
@@ -46,6 +39,13 @@ struct DiaryView: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
+                    }
+                }
+                if photoRecognitionEnabled {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button { showPhotoMeal = true } label: {
+                            Image(systemName: "sparkles.rectangle.stack")
+                        }
                     }
                 }
             }
