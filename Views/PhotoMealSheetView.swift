@@ -106,36 +106,102 @@ struct PhotoMealSheet: View {
     // MARK: - Source
 
     private var sourceView: some View {
-        VStack(spacing: 28) {
-            Spacer()
-            Image(systemName: "camera.viewfinder")
-                .font(.system(size: 64))
-                .foregroundStyle(.green.opacity(0.8))
-            Text("KI-Schätzung: Mengen immer überprüfen!")
-                .font(.caption).foregroundStyle(.secondary)
-            VStack(spacing: 12) {
-                Button { Task { await requestCameraForPhoto() } } label: {
-                    Label("Foto aufnehmen", systemImage: "camera.fill")
-                        .frame(maxWidth: .infinity).padding()
-                        .background(Color.green).foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+        ZStack {
+            // Subtiler Hintergrund-Gradient
+            LinearGradient(
+                colors: [Color.green.opacity(0.15), Color.blue.opacity(0.06), Color.clear],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                // Hero
+                VStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(.green.opacity(0.12))
+                            .frame(width: 90, height: 90)
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 44, weight: .light))
+                            .foregroundStyle(
+                                LinearGradient(colors: [.green, .mint],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .symbolEffect(.variableColor.iterative.dimInactiveLayers)
+                    }
+                    VStack(spacing: 6) {
+                        Text("KI-Erkennung")
+                            .font(.title.bold())
+                        Text("Wie möchtest du deine Mahlzeit erfassen?")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                 }
-                PhotosPicker(selection: $photosPickerItem, matching: .images) {
-                    Label("Aus Mediathek wählen", systemImage: "photo.on.rectangle")
-                        .frame(maxWidth: .infinity).padding()
-                        .background(Color(.systemGray5))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(.bottom, 40)
+
+                // Optionen
+                VStack(spacing: 10) {
+                    Button { Task { await requestCameraForPhoto() } } label: {
+                        aiOptionRow(icon: "camera.fill", color: .green,
+                                    title: "Foto aufnehmen",
+                                    desc: "KI erkennt Lebensmittel & Portionen automatisch")
+                    }
+                    .buttonStyle(.plain)
+
+                    PhotosPicker(selection: $photosPickerItem, matching: .images) {
+                        aiOptionRow(icon: "photo.stack.fill", color: .blue,
+                                    title: "Aus Mediathek",
+                                    desc: "Vorhandenes Foto analysieren lassen")
+                    }
+
+                    Button { showTextInput = true } label: {
+                        aiOptionRow(icon: "text.bubble.fill", color: .purple,
+                                    title: "Text eingeben",
+                                    desc: "Freitext – auch Fastfood & Markennamen")
+                    }
+                    .buttonStyle(.plain)
                 }
-                Button { showTextInput = true } label: {
-                    Label("Text eingeben", systemImage: "text.cursor")
-                        .frame(maxWidth: .infinity).padding()
-                        .background(Color(.systemGray5))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
+                .padding(.horizontal, 20)
+
+                Spacer()
+
+                Text("KI-Schätzung — Mengen bitte immer prüfen")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.bottom, 12)
             }
-            .padding(.horizontal)
-            Spacer(); Spacer()
         }
+    }
+
+    private func aiOptionRow(icon: String, color: Color, title: String, desc: String) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(color.opacity(0.15))
+                    .frame(width: 50, height: 50)
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(color)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(desc)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.quaternary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .glassEffect(in: RoundedRectangle(cornerRadius: 18))
     }
 
     // MARK: - Text Input
