@@ -152,17 +152,6 @@ enum PhotoMealRecognizer {
 
         \(portionHints)
 
-        Fastfood-Referenz — verwende AUSSCHLIESSLICH diese Werte, nicht dein eigenes Training:
-        McDonald's Big Mac 214g · McDouble 165g · Hamburger 105g · Cheeseburger 120g · McFish 136g · McRoyal 198g · McChicken 150g
-        McDonald's McNuggets 4er 68g · 6er 102g · 9er 153g · 20er 340g
-        McDonald's Pommes klein 80g · mittel 115g · groß 154g
-        McDonald's Dips (Curry / BBQ / Ketchup / Senf / Sweet Chili) je 25g
-        Burger King Whopper 291g · Junior Whopper 155g · Cheeseburger BK 118g · BK Pommes mittel 115g · BK Pommes groß 154g
-        KFC Original Recipe (1 Stück) 115g · Zinger Burger 205g · KFC Pommes mittel 100g
-        Subway 6-inch Sub 230g · Footlong 460g
-        Döner im Fladenbrot 380g · Döner in der Box 300g
-        Coca-Cola 0,25l 250ml · 0,3l 300ml · 0,4l 400ml · 0,5l 500ml · Sprite / Fanta gleiche Größen
-
         Schätze außerdem die Nährwerte pro 100g für jedes Lebensmittel.
 
         Antworte ausschließlich als JSON ohne weitere Erklärungen:

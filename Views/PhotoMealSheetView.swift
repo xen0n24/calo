@@ -247,6 +247,17 @@ struct PhotoMealSheet: View {
 
     // MARK: - Confirm
 
+    private var draftTotals: (kcal: Double, protein: Double, carbs: Double, fat: Double) {
+        draftItems.reduce((0, 0, 0, 0)) { acc, item in
+            guard let food = item.matchedFood else { return acc }
+            let f = item.grams / 100.0
+            return (acc.0 + food.nutritionPer100g.kcal    * f,
+                    acc.1 + food.nutritionPer100g.protein  * f,
+                    acc.2 + food.nutritionPer100g.carbs    * f,
+                    acc.3 + food.nutritionPer100g.fat      * f)
+        }
+    }
+
     private var confirmView: some View {
         ScrollView {
             VStack(spacing: 14) {
@@ -255,6 +266,24 @@ struct PhotoMealSheet: View {
                     .padding(10).frame(maxWidth: .infinity)
                     .background(Color.green.opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                // Nährwert-Zusammenfassung
+                if !draftItems.isEmpty {
+                    let t = draftTotals
+                    HStack(spacing: 0) {
+                        nutritionCell(value: t.kcal,    label: "kcal",  color: .green,  isFirst: true)
+                        Divider().frame(height: 32)
+                        nutritionCell(value: t.protein, label: "Prot.",  color: .blue)
+                        Divider().frame(height: 32)
+                        nutritionCell(value: t.carbs,   label: "Koh.",   color: .orange)
+                        Divider().frame(height: 32)
+                        nutritionCell(value: t.fat,     label: "Fett",   color: .yellow)
+                    }
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
 
                 // Von KI erkannte Lebensmittel als antippbare Chips
                 if !detectedLabels.isEmpty {
@@ -469,6 +498,18 @@ struct PhotoMealSheet: View {
     }
 
     private static let gramsValues: [Double] = Array(stride(from: 5.0, through: 2000.0, by: 5.0))
+
+    private func nutritionCell(value: Double, label: String, color: Color, isFirst: Bool = false) -> some View {
+        VStack(spacing: 2) {
+            Text(value < 10 ? String(format: "%.1f", value) : "\(Int(value))")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(color)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
 
     // MARK: - Error
 
