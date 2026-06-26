@@ -37,6 +37,11 @@ struct PhotoMealSheet: View {
     @State private var showLabels                           = false
     @State private var userComment:       String            = ""
     @State private var analysisComplete                     = false
+    @State private var expandedGramsID:   UUID?            = nil
+    @State private var showAdjustment                       = false
+    @State private var adjustmentPrompt:  String           = ""
+    @State private var showAddItem                          = false
+    @State private var addItemPrompt:     String           = ""
 
     private enum ViewPhase { case source, comment, analyzing, confirm, error }
     private var phase: ViewPhase {
@@ -253,6 +258,72 @@ struct PhotoMealSheet: View {
                         .foregroundStyle(.green)
                 }
 
+                // KI-Anpassung & Einzelhinzufügen
+                HStack(spacing: 10) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showAdjustment.toggle(); if showAdjustment { showAddItem = false }
+                        }
+                    } label: {
+                        Label("Anpassen", systemImage: "arrow.clockwise")
+                            .font(.caption).frame(maxWidth: .infinity).padding(8)
+                            .background(showAdjustment ? Color.orange.opacity(0.15) : Color(.systemGray5))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .foregroundStyle(showAdjustment ? Color.orange : Color.primary)
+                    }
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showAddItem.toggle(); if showAddItem { showAdjustment = false }
+                        }
+                    } label: {
+                        Label("KI-Zusatz", systemImage: "sparkles")
+                            .font(.caption).frame(maxWidth: .infinity).padding(8)
+                            .background(showAddItem ? Color.blue.opacity(0.12) : Color(.systemGray5))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .foregroundStyle(showAddItem ? Color.blue : Color.primary)
+                    }
+                }
+
+                if showAdjustment {
+                    VStack(spacing: 8) {
+                        TextField("Was stimmt nicht? (z.B. 'ohne Pommes, Portion kleiner')",
+                                  text: $adjustmentPrompt, axis: .vertical)
+                            .lineLimit(2, reservesSpace: true)
+                            .padding(8)
+                            .background(Color(.systemGray6))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        Button {
+                            let text = adjustmentPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !text.isEmpty else { return }
+                            Task { await reanalyze(comment: text) }
+                        } label: {
+                            Label("Neu analysieren", systemImage: "sparkles")
+                                .frame(maxWidth: .infinity).padding(10)
+                                .background(Color.orange).foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+                }
+
+                if showAddItem {
+                    VStack(spacing: 8) {
+                        TextField("Was fehlt? (z.B. 'Ketchup', 'Cola 0,5l')", text: $addItemPrompt)
+                            .padding(8)
+                            .background(Color(.systemGray6))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        Button {
+                            let text = addItemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !text.isEmpty else { return }
+                            Task { await addItemViaAI(description: text) }
+                        } label: {
+                            Label("Per KI hinzufügen", systemImage: "plus.circle")
+                                .frame(maxWidth: .infinity).padding(10)
+                                .background(Color.blue).foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+                }
+
                 let saveable = draftItems.filter { $0.matchedFood != nil }
                 let skipped  = draftItems.count - saveable.count
                 Button { save() } label: {
@@ -278,18 +349,33 @@ struct PhotoMealSheet: View {
     }
 
     private func draftItemRow(item: Binding<DraftItem>) -> some View {
-        let matched = item.wrappedValue.matchedFood
-        return VStack(alignment: .leading, spacing: 8) {
+        let isExpanded = expandedGramsID == item.wrappedValue.id
+        let matched    = item.wrappedValue.matchedFood
+        return VStack(spacing: 0) {
             HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     TextField("Name", text: item.name)
-                        .font(.subheadline.weight(.medium))
+                        .font(.subheadline)
                     if matched == nil {
                         Text("Nicht gefunden — zum Suchen tippen")
-                            .font(.caption).foregroundStyle(.orange)
+                            .font(.caption2).foregroundStyle(.orange)
                     }
                 }
                 Spacer()
+                // Gramm-Badge: antippen öffnet Rad-Picker
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        expandedGramsID = isExpanded ? nil : item.wrappedValue.id
+                    }
+                } label: {
+                    Text("\(Int(item.wrappedValue.grams)) g")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.green)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Color.green.opacity(0.12))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
                 Button {
                     editingItemID  = item.wrappedValue.id
                     showFoodPicker = true
@@ -306,12 +392,24 @@ struct PhotoMealSheet: View {
                 }
                 .buttonStyle(.plain)
             }
-            NumericStepperView(value: item.grams, range: 1...5_000, step: 5, unit: "g")
+            .padding(.horizontal, 12).padding(.vertical, 10)
+
+            if isExpanded {
+                Divider()
+                Picker("", selection: item.grams) {
+                    ForEach(Self.gramsValues, id: \.self) { v in
+                        Text("\(Int(v)) g").tag(v)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(height: 130)
+            }
         }
-        .padding(12)
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
+
+    private static let gramsValues: [Double] = Array(stride(from: 5.0, through: 2000.0, by: 5.0))
 
     // MARK: - Error
 
@@ -328,6 +426,9 @@ struct PhotoMealSheet: View {
                 capturedImage = nil; draftItems = []; errorMessage = nil
                 photosPickerItem = nil; detectedLabels = []
                 userComment = ""; analysisComplete = false
+                expandedGramsID = nil
+                showAdjustment = false; adjustmentPrompt = ""
+                showAddItem = false; addItemPrompt = ""
             }
             .buttonStyle(.borderedProminent)
             Spacer(); Spacer()
@@ -351,13 +452,14 @@ struct PhotoMealSheet: View {
     }
 
     private func onFoodPicked(food: Food, grams: Double) {
+        let snapped = max(5.0, (grams / 5.0).rounded() * 5.0)
         if let id = editingItemID,
            let idx = draftItems.firstIndex(where: { $0.id == id }) {
             draftItems[idx].matchedFood = food
             draftItems[idx].name        = food.name
-            draftItems[idx].grams       = grams
+            draftItems[idx].grams       = snapped
         } else {
-            draftItems.append(DraftItem(name: food.name, grams: grams, matchedFood: food))
+            draftItems.append(DraftItem(name: food.name, grams: snapped, matchedFood: food))
         }
         editingItemID = nil
     }
@@ -377,9 +479,10 @@ struct PhotoMealSheet: View {
             detectedLabels = result.detectedLabels
             var seen       = Set<PersistentIdentifier>()
             draftItems     = result.items.compactMap { item -> DraftItem? in
-                let food = matchOrCreate(item: item)
+                let food    = matchOrCreate(item: item)
                 guard seen.insert(food.persistentModelID).inserted else { return nil }
-                return DraftItem(name: item.name, grams: Double(item.estimatedGrams), matchedFood: food)
+                let snapped = max(5.0, (Double(item.estimatedGrams) / 5.0).rounded() * 5.0)
+                return DraftItem(name: item.name, grams: snapped, matchedFood: food)
             }
             showLabels       = draftItems.isEmpty
             analysisComplete = true
@@ -394,6 +497,41 @@ struct PhotoMealSheet: View {
             .filter { $0.source != .recipe && FoodSearch.matches(food: $0, query: name) }
             .sorted { FoodSearch.score(food: $0, query: name) > FoodSearch.score(food: $1, query: name) }
             .first
+    }
+
+    /// Analyse mit neuem Kommentar wiederholen (alle Einträge werden ersetzt).
+    @MainActor
+    private func reanalyze(comment: String) async {
+        guard let image = capturedImage else { return }
+        showAdjustment   = false
+        adjustmentPrompt = ""
+        draftItems       = []
+        detectedLabels   = []
+        analysisComplete = false
+        expandedGramsID  = nil
+        await analyze(image: image, comment: comment)
+    }
+
+    /// Einzelnes Lebensmittel per Beschreibung per KI hinzufügen (bestehende Liste bleibt).
+    @MainActor
+    private func addItemViaAI(description: String) async {
+        guard let image = capturedImage else { return }
+        showAddItem = false
+        isAnalyzing = true
+        do {
+            let result      = try await PhotoMealRecognizer.recognizeSingle(image: image, description: description)
+            var existingIDs = Set(draftItems.compactMap { $0.matchedFood?.persistentModelID })
+            for item in result.items {
+                let food    = matchOrCreate(item: item)
+                guard existingIDs.insert(food.persistentModelID).inserted else { continue }
+                let snapped = max(5.0, (Double(item.estimatedGrams) / 5.0).rounded() * 5.0)
+                draftItems.append(DraftItem(name: item.name, grams: snapped, matchedFood: food))
+            }
+            addItemPrompt = ""
+        } catch {
+            // Fehler ignorieren — kein Eintrag wird hinzugefügt, Nutzer kann es erneut versuchen
+        }
+        isAnalyzing = false
     }
 
     /// Versucht das Lebensmittel in der DB zu finden – legt es sonst neu an (source: .custom).

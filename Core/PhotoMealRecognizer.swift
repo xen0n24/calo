@@ -24,7 +24,7 @@ struct RecognitionResult {
 enum PhotoMealRecognizer {
 
     static var apiKey: String {
-        get { UserDefaults.standard.string(forKey: "geminiApiKey") ?? "" }
+        UserDefaults.standard.string(forKey: "geminiApiKey") ?? ""
     }
 
     static let modelID = "gemini-2.5-flash-lite"
@@ -56,15 +56,26 @@ enum PhotoMealRecognizer {
         }
     }
 
-    // MARK: Main entry point
+    // MARK: - Shared prompt fragments
+
+    private static let jsonFormat = """
+    {"items":[{"name":"Pizza Margherita","estimatedGrams":350,"kcalPer100g":266,"proteinPer100g":11,"carbsPer100g":33,"fatPer100g":10}]}
+    """
+
+    /// Typische Portionsgrößen als Referenz im Prompt
+    private static let portionHints = """
+    Typische Portionsgrößen (nur als Referenz wenn Foto unklar):
+    Döner Kebab 380g · Chicken Nugget (1 Stück) 17g · Pommes Frites 150g · \
+    Pizza (1 Stück) 120g · Burger 200g · Schnitzel 180g · Hähnchenbrust gebraten 150g · \
+    Pasta (Portion) 220g · Reis (Beilage) 150g · Brötchen 55g · Brot (Scheibe) 40g · \
+    Ketchup 20g · Mayonnaise 15g · Apfel 150g · Banane 120g · Cola (Glas) 250ml · Kaffee 200ml
+    """
+
+    // MARK: - Vollständige Mahlzeitanalyse
 
     static func recognize(image: UIImage, comment: String = "") async throws -> RecognitionResult {
         guard isAvailable else { throw RecognizerError.noApiKey }
-
-        guard let jpegData = resized(image, maxSide: 1024).jpegData(compressionQuality: 0.5) else {
-            throw RecognizerError.imageFailed
-        }
-        let base64 = jpegData.base64EncodedString()
+        guard let base64 = imageBase64(image) else { throw RecognizerError.imageFailed }
 
         let commentLine = comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? ""
@@ -80,13 +91,55 @@ enum PhotoMealRecognizer {
         - Getränke und Beilagen separat wenn sichtbar
         - Mengen realistisch in Gramm schätzen (typische Portionsgrößen)
 
+        \(portionHints)
+
         Schätze außerdem die Nährwerte pro 100g für jedes Lebensmittel/Gericht.
 
         Antworte ausschließlich als JSON ohne weitere Erklärungen:
-        {"items":[{"name":"Pizza Margherita","estimatedGrams":350,"kcalPer100g":266,"proteinPer100g":11,"carbsPer100g":33,"fatPer100g":10}]}
+        \(jsonFormat)
         Alle Namen auf Deutsch. Nährwerte als Zahlen ohne Einheit.
         """
 
+        let itemsArray = try await callGemini(prompt: prompt, base64: base64)
+        let items      = parseItems(from: itemsArray)
+        guard !items.isEmpty else { throw RecognizerError.noItemsDetected }
+        return RecognitionResult(items: items, detectedLabels: items.map { $0.name })
+    }
+
+    // MARK: - Einzelnes Lebensmittel per Beschreibung hinzufügen
+
+    static func recognizeSingle(image: UIImage, description: String) async throws -> RecognitionResult {
+        guard isAvailable else { throw RecognizerError.noApiKey }
+        guard let base64 = imageBase64(image) else { throw RecognizerError.imageFailed }
+
+        let prompt = """
+        Du bist ein Ernährungs-Experte. Identifiziere auf dem Foto NUR das folgende Lebensmittel und schätze die sichtbare Menge:
+        „\(description)"
+
+        \(portionHints)
+
+        Ignoriere alle anderen Komponenten auf dem Bild vollständig.
+        Falls das Lebensmittel nicht eindeutig sichtbar ist, schätze eine realistische Standardportion.
+        Schätze außerdem die Nährwerte pro 100g.
+
+        Antworte ausschließlich als JSON ohne weitere Erklärungen:
+        \(jsonFormat)
+        Name auf Deutsch. Nährwerte als Zahlen ohne Einheit.
+        """
+
+        let itemsArray = try await callGemini(prompt: prompt, base64: base64)
+        let items      = parseItems(from: itemsArray)
+        guard !items.isEmpty else { throw RecognizerError.noItemsDetected }
+        return RecognitionResult(items: items, detectedLabels: items.map { $0.name })
+    }
+
+    // MARK: - Private Helpers
+
+    private static func imageBase64(_ image: UIImage) -> String? {
+        resized(image, maxSide: 1024).jpegData(compressionQuality: 0.5)?.base64EncodedString()
+    }
+
+    private static func callGemini(prompt: String, base64: String) async throws -> [[String: Any]] {
         let body: [String: Any] = [
             "contents": [[
                 "parts": [
@@ -94,9 +147,7 @@ enum PhotoMealRecognizer {
                     ["inline_data": ["mime_type": "image/jpeg", "data": base64]]
                 ]
             ]],
-            "generationConfig": [
-                "temperature": 0.2
-            ]
+            "generationConfig": ["temperature": 0.2]
         ]
 
         let urlString = "https://generativelanguage.googleapis.com/v1beta/models/\(modelID):generateContent?key=\(apiKey)"
@@ -115,7 +166,6 @@ enum PhotoMealRecognizer {
             throw RecognizerError.networkError(statusCode, String(msg))
         }
 
-        // Gemini-Antwort entpacken
         guard
             let json       = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let candidates = json["candidates"] as? [[String: Any]],
@@ -124,21 +174,24 @@ enum PhotoMealRecognizer {
             let text       = parts.first?["text"] as? String
         else { throw RecognizerError.parseFailed }
 
-        // JSON aus dem Text extrahieren (Markdown-Fences entfernen falls vorhanden)
         let cleaned = extractJSON(from: text)
 
         guard
-            let textData    = cleaned.data(using: .utf8),
-            let parsed      = try? JSONSerialization.jsonObject(with: textData) as? [String: Any],
-            let itemsArray  = parsed["items"] as? [[String: Any]]
+            let textData   = cleaned.data(using: .utf8),
+            let parsed     = try? JSONSerialization.jsonObject(with: textData) as? [String: Any],
+            let itemsArray = parsed["items"] as? [[String: Any]]
         else { throw RecognizerError.parseFailed }
 
-        let items: [RecognizedFoodItem] = itemsArray.compactMap { dict in
+        return itemsArray
+    }
+
+    private static func parseItems(from itemsArray: [[String: Any]]) -> [RecognizedFoodItem] {
+        itemsArray.compactMap { dict in
             guard
                 let name  = dict["name"]           as? String,
                 let grams = dict["estimatedGrams"] as? Int
             else { return nil }
-            // Nährwerte – Gemini liefert Int oder Double, daher beide Varianten prüfen
+            // Gemini liefert Int oder Double — beide Varianten abfangen
             func d(_ key: String) -> Double {
                 (dict[key] as? Double) ?? (dict[key] as? Int).map { Double($0) } ?? 0
             }
@@ -152,23 +205,14 @@ enum PhotoMealRecognizer {
                 fatPer100g:     d("fatPer100g")
             )
         }
-
-        guard !items.isEmpty else { throw RecognizerError.noItemsDetected }
-
-        return RecognitionResult(
-            items:          items,
-            detectedLabels: items.map { $0.name }
-        )
     }
-
-    // MARK: Helpers
 
     /// Entfernt optionale Markdown-Codeblöcke (```json ... ```)
     private static func extractJSON(from text: String) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("```") {
-            let lines  = trimmed.components(separatedBy: "\n")
-            let inner  = lines.dropFirst().dropLast().joined(separator: "\n")
+            let lines = trimmed.components(separatedBy: "\n")
+            let inner = lines.dropFirst().dropLast().joined(separator: "\n")
             return inner.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return trimmed
@@ -176,10 +220,10 @@ enum PhotoMealRecognizer {
 
     /// Skaliert ein Bild auf maximal maxSide×maxSide Pixel herunter
     private static func resized(_ image: UIImage, maxSide: CGFloat) -> UIImage {
-        let size = image.size
+        let size    = image.size
         let longest = max(size.width, size.height)
         guard longest > maxSide else { return image }
-        let scale  = maxSide / longest
+        let scale   = maxSide / longest
         let newSize = CGSize(width: size.width * scale, height: size.height * scale)
         let renderer = UIGraphicsImageRenderer(size: newSize)
         return renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) }
