@@ -390,16 +390,20 @@ struct FoodDetailSheet: View {
     @Environment(\.modelContext)  private var modelContext
     @Environment(\.dismiss)       private var dismiss
 
-    @State private var grams:        Double    = 100
-    @State private var portionIdx:   Int       = -1
-    @State private var portionCount: Double    = 1.0
-    @State private var selectedMeal: MealType  = .breakfast
-    @State private var selectedDate: Date      = .now
+    @State private var grams:           Double   = 100
+    @State private var useMilliliters:  Bool     = false
+    @State private var portionIdx:      Int      = -1
+    @State private var portionCountInt: Int      = 1
+    @State private var portionGramsInt: Int      = 100
+    @State private var selectedMeal:    MealType = .breakfast
+    @State private var selectedDate:    Date     = .now
+
+    private static let gramValues = Array(stride(from: 5, through: 2000, by: 5))
 
     private var n: Nutrition? { food.nutritionPer100g }
     private var effectiveGrams: Double {
         if portionIdx >= 0 && portionIdx < food.portions.count {
-            return food.portions[portionIdx].grams * portionCount
+            return food.portions[portionIdx].grams * Double(portionCountInt)
         }
         return grams
     }
@@ -425,40 +429,60 @@ struct FoodDetailSheet: View {
 
                 Section("Menge") {
                     if !food.portions.isEmpty {
-                        Picker("Portion", selection: $portionIdx) {
-                            ForEach(food.portions.indices, id: \.self) { i in
-                                Text("\(food.portions[i].name) · \(Int(food.portions[i].grams)) g").tag(i)
-                            }
-                            Text("Eigene Menge").tag(-1)
-                        }
-                        .pickerStyle(.wheel)
-                        .frame(height: 130)
+                        // Zwei Räder: links Anzahl oder Gramm, rechts Portionsname
+                        HStack(alignment: .center, spacing: 0) {
+                            if portionIdx >= 0 {
+                                Picker("", selection: $portionCountInt) {
+                                    ForEach(1...20, id: \.self) { n in Text("\(n)").tag(n) }
+                                }
+                                .pickerStyle(.wheel)
+                                .frame(width: 110)
 
-                        if portionIdx >= 0 {
-                            HStack {
-                                Text("Anzahl")
-                                Spacer()
-                                NumericStepperView(value: $portionCount, range: 0.5...20, step: 0.5, unit: "×")
+                                Text("×")
+                                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 4)
+                            } else {
+                                Picker("", selection: $portionGramsInt) {
+                                    ForEach(Self.gramValues, id: \.self) { v in Text("\(v)").tag(v) }
+                                }
+                                .pickerStyle(.wheel)
+                                .frame(width: 160)
+                                .onChange(of: portionGramsInt) { _, v in grams = Double(v) }
+
+                                Text(food.unit.rawValue)
+                                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 4)
                             }
-                        } else {
-                            NumericStepperView(value: $grams, range: 1...5_000, step: 5, unit: food.unit.rawValue)
+
+                            Picker("", selection: $portionIdx) {
+                                ForEach(food.portions.indices, id: \.self) { i in
+                                    Text(food.portions[i].name).tag(i)
+                                }
+                                Text("Gramm").tag(-1)
+                            }
+                            .pickerStyle(.wheel)
+                            .onChange(of: portionIdx) { _, idx in
+                                if idx == -1 {
+                                    portionGramsInt = max(5, min(2000, Int((grams / 5.0).rounded()) * 5))
+                                } else {
+                                    portionCountInt = 1
+                                }
+                            }
                         }
+                        .frame(height: 140)
+                        .listRowInsets(EdgeInsets())
+                        .padding(.horizontal)
                     } else {
-                        NumericStepperView(value: $grams, range: 1...5_000, step: 5, unit: food.unit.rawValue)
-                        if let serving = food.defaultServingGrams {
-                            Button("Standardportion: \(Int(serving)) \(food.unit.rawValue)") { grams = serving }
-                                .foregroundStyle(theme.accent)
-                        }
-                    }
-                }
-                .onChange(of: portionIdx) { _, idx in
-                    if idx >= 0 && idx < food.portions.count {
-                        grams = food.portions[idx].grams * portionCount
-                    }
-                }
-                .onChange(of: portionCount) { _, count in
-                    if portionIdx >= 0 && portionIdx < food.portions.count {
-                        grams = food.portions[portionIdx].grams * count
+                        WheelAmountPicker(
+                            grams:          $grams,
+                            useMilliliters: $useMilliliters,
+                            canToggleUnit:  true,
+                            defaultServing: food.defaultServingGrams
+                        )
+                        .listRowInsets(EdgeInsets())
+                        .padding(.vertical, 8)
                     }
                 }
 
