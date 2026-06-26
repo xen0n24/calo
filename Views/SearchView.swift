@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import VisionKit
+import AVFoundation
 
 // MARK: - SearchTab
 
@@ -25,10 +26,11 @@ struct SearchView: View {
     @State private var searchTask: Task<Void, Never>? = nil
 
     // Sheets – Lebensmittel
-    @State private var selectedFood:     Food? = nil
-    @State private var showScanner            = false
-    @State private var showCustomFoodEditor   = false
-    @State private var editingFood:      Food? = nil
+    @State private var selectedFood:          Food? = nil
+    @State private var showScanner                  = false
+    @State private var showCameraPermissionAlert    = false
+    @State private var showCustomFoodEditor         = false
+    @State private var editingFood:           Food? = nil
 
     // Sheets – Rezepte
     @State private var detailRecipe: Recipe?  = nil
@@ -143,7 +145,7 @@ struct SearchView: View {
                     }
                     if DataScannerViewController.isSupported {
                         ToolbarItem(placement: .navigationBarTrailing) {
-                            Button { showScanner = true } label: {
+                            Button { Task { await requestCameraForScanner() } } label: {
                                 Image(systemName: "barcode.viewfinder")
                             }
                         }
@@ -160,6 +162,11 @@ struct SearchView: View {
             .sheet(item: $editingFood) { CustomFoodSheet(food: $0) }
             .fullScreenCover(isPresented: $showScanner) {
                 BarcodeScannerSheet { code in Task { await handleBarcode(code) } }
+            }
+            .alert("Kamerazugriff verweigert", isPresented: $showCameraPermissionAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Bitte erlaube den Kamerazugriff in den iOS-Einstellungen unter Datenschutz → Kamera.")
             }
         }
     }
@@ -298,6 +305,20 @@ struct SearchView: View {
     }
 
     // MARK: - Aktionen
+
+    @MainActor
+    private func requestCameraForScanner() async {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            showScanner = true
+        case .notDetermined:
+            let granted = await AVCaptureDevice.requestAccess(for: .video)
+            if granted { showScanner = true }
+            else { showCameraPermissionAlert = true }
+        default:
+            showCameraPermissionAlert = true
+        }
+    }
 
     private func addAndSelect(_ product: OFFProduct) {
         if let barcode = product.code,
