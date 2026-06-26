@@ -222,8 +222,12 @@ struct SearchView: View {
             }
         } else if !searchText.isEmpty && localFoods.isEmpty && !isLoadingOnline {
             Section {
-                ContentUnavailableView.search(text: searchText)
-                    .listRowBackground(Color.clear)
+                ContentUnavailableView {
+                    Label("Keine Ergebnisse", systemImage: "magnifyingglass")
+                } description: {
+                    Text("Kein Lebensmittel gefunden für „\(searchText)".")
+                }
+                .listRowBackground(Color.clear)
             }
         }
     }

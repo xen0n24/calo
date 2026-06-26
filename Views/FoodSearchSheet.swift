@@ -740,8 +740,12 @@ struct FoodSearchSheet: View {
     }
 
     private var emptyState: some View {
-        ContentUnavailableView.search(text: searchText)
-            .listRowBackground(Color.clear)
+        ContentUnavailableView {
+            Label("Keine Ergebnisse", systemImage: "magnifyingglass")
+        } description: {
+            Text("Kein Lebensmittel gefunden für „\(searchText)".")
+        }
+        .listRowBackground(Color.clear)
     }
 
     private func favoriteSwipeButton(isFavorite: Bool, action: @escaping () -> Void) -> some View {
