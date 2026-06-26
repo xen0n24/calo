@@ -56,7 +56,7 @@ enum PhotoMealRecognizer {
     static func recognize(image: UIImage) async throws -> RecognitionResult {
         guard isAvailable else { throw RecognizerError.noApiKey }
 
-        guard let jpegData = image.jpegData(compressionQuality: 0.75) else {
+        guard let jpegData = resized(image, maxSide: 1024).jpegData(compressionQuality: 0.5) else {
             throw RecognizerError.imageFailed
         }
         let base64 = jpegData.base64EncodedString()
@@ -142,5 +142,16 @@ enum PhotoMealRecognizer {
             return inner.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return trimmed
+    }
+
+    /// Skaliert ein Bild auf maximal maxSide×maxSide Pixel herunter
+    private static func resized(_ image: UIImage, maxSide: CGFloat) -> UIImage {
+        let size = image.size
+        let longest = max(size.width, size.height)
+        guard longest > maxSide else { return image }
+        let scale  = maxSide / longest
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) }
     }
 }
