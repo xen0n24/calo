@@ -374,6 +374,7 @@ struct PhotoMealSheet: View {
         capturedImage = image
     }
 
+    @MainActor
     private func analyze(image: UIImage, comment: String = "") async {
         isAnalyzing = true; errorMessage = nil
         do {
@@ -381,8 +382,8 @@ struct PhotoMealSheet: View {
             detectedLabels = result.detectedLabels
             var seen       = Set<PersistentIdentifier>()
             draftItems     = result.items.compactMap { item -> DraftItem? in
-                guard let food = match(item.name),
-                      seen.insert(food.persistentModelID).inserted else { return nil }
+                let food = matchOrCreate(item: item)
+                guard seen.insert(food.persistentModelID).inserted else { return nil }
                 return DraftItem(name: item.name, grams: Double(item.estimatedGrams), matchedFood: food)
             }
             showLabels       = draftItems.isEmpty
@@ -398,6 +399,27 @@ struct PhotoMealSheet: View {
             .filter { $0.source != .recipe && FoodSearch.matches(food: $0, query: name) }
             .sorted { FoodSearch.score(food: $0, query: name) > FoodSearch.score(food: $1, query: name) }
             .first
+    }
+
+    /// Versucht das Lebensmittel in der DB zu finden – legt es sonst neu an (source: .custom).
+    @MainActor
+    private func matchOrCreate(item: RecognizedFoodItem) -> Food {
+        if let existing = match(item.name) { return existing }
+
+        let nutrition = Nutrition(
+            kcal:    max(1, item.kcalPer100g),
+            protein: max(0, item.proteinPer100g),
+            carbs:   max(0, item.carbsPer100g),
+            fat:     max(0, item.fatPer100g)
+        )
+        let food = Food(
+            name:              item.name,
+            source:            .custom,
+            nutritionPer100g:  nutrition
+        )
+        modelContext.insert(nutrition)
+        modelContext.insert(food)
+        return food
     }
 
     private func save() {

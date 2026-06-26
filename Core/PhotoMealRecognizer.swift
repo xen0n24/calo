@@ -7,6 +7,11 @@ struct RecognizedFoodItem {
     var name:           String
     var estimatedGrams: Int
     var confidence:     Double
+    // Nährwerte pro 100g (von Gemini geschätzt)
+    var kcalPer100g:    Double
+    var proteinPer100g: Double
+    var carbsPer100g:   Double
+    var fatPer100g:     Double
 }
 
 struct RecognitionResult {
@@ -75,9 +80,11 @@ enum PhotoMealRecognizer {
         - Getränke und Beilagen separat wenn sichtbar
         - Mengen realistisch in Gramm schätzen (typische Portionsgrößen)
 
+        Schätze außerdem die Nährwerte pro 100g für jedes Lebensmittel/Gericht.
+
         Antworte ausschließlich als JSON ohne weitere Erklärungen:
-        {"items":[{"name":"Pizza Margherita","estimatedGrams":350}]}
-        Alle Namen auf Deutsch.
+        {"items":[{"name":"Pizza Margherita","estimatedGrams":350,"kcalPer100g":266,"proteinPer100g":11,"carbsPer100g":33,"fatPer100g":10}]}
+        Alle Namen auf Deutsch. Nährwerte als Zahlen ohne Einheit.
         """
 
         let body: [String: Any] = [
@@ -131,7 +138,19 @@ enum PhotoMealRecognizer {
                 let name  = dict["name"]           as? String,
                 let grams = dict["estimatedGrams"] as? Int
             else { return nil }
-            return RecognizedFoodItem(name: name, estimatedGrams: grams, confidence: 0.9)
+            // Nährwerte – Gemini liefert Int oder Double, daher beide Varianten prüfen
+            func d(_ key: String) -> Double {
+                (dict[key] as? Double) ?? (dict[key] as? Int).map { Double($0) } ?? 0
+            }
+            return RecognizedFoodItem(
+                name:           name,
+                estimatedGrams: grams,
+                confidence:     0.9,
+                kcalPer100g:    d("kcalPer100g"),
+                proteinPer100g: d("proteinPer100g"),
+                carbsPer100g:   d("carbsPer100g"),
+                fatPer100g:     d("fatPer100g")
+            )
         }
 
         guard !items.isEmpty else { throw RecognizerError.noItemsDetected }
