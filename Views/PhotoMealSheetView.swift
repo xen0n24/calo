@@ -26,7 +26,9 @@ struct PhotoMealSheet: View {
     @State private var capturedImage:     UIImage?          = nil
     @State private var draftItems:        [DraftItem]       = []
     @State private var isAnalyzing                          = false
-    @State private var errorMessage:      String?           = nil
+    @State private var errorMessage:      String?           = nil   // Fehler in comment/textInput-Phase (inline)
+    @State private var confirmError:      String?           = nil   // Fehler in confirm-Phase (inline)
+    @State private var retryStatus:       String?           = nil   // z. B. "Versuch 2/3…"
     @State private var photosPickerItem:  PhotosPickerItem? = nil
     @State private var showCamera                           = false
     @State private var showCameraPermissionAlert             = false
@@ -45,15 +47,17 @@ struct PhotoMealSheet: View {
     @State private var showTextInput                        = false
     @State private var mealDescription:   String           = ""
 
-    private enum ViewPhase { case source, textInput, comment, analyzing, confirm, error }
+    // Kein .error-Phase mehr – Fehler werden inline angezeigt, Eingaben bleiben erhalten
+    private enum ViewPhase { case source, textInput, comment, analyzing, confirm }
     private var phase: ViewPhase {
         if isAnalyzing          { return .analyzing }
-        if errorMessage != nil  { return .error }
         if analysisComplete     { return .confirm }
         if capturedImage != nil { return .comment }
         if showTextInput        { return .textInput }
         return .source
     }
+
+    private static let maxRetries = 3
 
     init(date: Date, initialMeal: MealType) {
         self.date        = date
@@ -70,7 +74,6 @@ struct PhotoMealSheet: View {
                 case .comment:   commentView
                 case .analyzing: analyzingView
                 case .confirm:   confirmView
-                case .error:     errorView
                 }
             }
             .navigationTitle("Mahlzeit per KI")
@@ -196,6 +199,15 @@ struct PhotoMealSheet: View {
                     .font(.system(size: 48))
                     .foregroundStyle(.green)
 
+                // Inline-Fehlerbanner – Text bleibt erhalten
+                if let msg = errorMessage {
+                    inlineErrorBanner(message: msg) {
+                        let trimmed = mealDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else { return }
+                        Task { await analyzeText(description: trimmed) }
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Was hast du gegessen?")
                         .font(.headline)
@@ -214,7 +226,8 @@ struct PhotoMealSheet: View {
                     guard !trimmed.isEmpty else { return }
                     Task { await analyzeText(description: trimmed) }
                 } label: {
-                    Label("Analysieren", systemImage: "sparkles")
+                    Label(errorMessage != nil ? "Erneut analysieren" : "Analysieren",
+                          systemImage: "sparkles")
                         .font(.headline)
                         .frame(maxWidth: .infinity).padding()
                         .background(trimmed.isEmpty ? Color.gray : Color.green)
@@ -226,6 +239,7 @@ struct PhotoMealSheet: View {
                 Button {
                     showTextInput   = false
                     mealDescription = ""
+                    errorMessage    = nil
                 } label: {
                     Text("Zurück")
                         .font(.subheadline).foregroundStyle(.secondary)
@@ -247,6 +261,14 @@ struct PhotoMealSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14)).clipped()
                 }
 
+                // Inline-Fehlerbanner – Foto und Kommentar bleiben erhalten
+                if let msg = errorMessage {
+                    inlineErrorBanner(message: msg) {
+                        guard let img = capturedImage else { return }
+                        Task { await analyze(image: img, comment: userComment) }
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Beschreibung (optional)")
                         .font(.headline)
@@ -262,7 +284,8 @@ struct PhotoMealSheet: View {
                 Button {
                     Task { await analyze(image: capturedImage!, comment: userComment) }
                 } label: {
-                    Label("Analysieren", systemImage: "sparkles")
+                    Label(errorMessage != nil ? "Erneut analysieren" : "Analysieren",
+                          systemImage: "sparkles")
                         .font(.headline)
                         .frame(maxWidth: .infinity).padding()
                         .background(Color.green).foregroundStyle(.white)
@@ -270,8 +293,9 @@ struct PhotoMealSheet: View {
                 }
 
                 Button {
-                    capturedImage = nil
-                    userComment   = ""
+                    capturedImage    = nil
+                    userComment      = ""
+                    errorMessage     = nil
                     photosPickerItem = nil
                 } label: {
                     Text("Anderes Foto wählen")
@@ -288,7 +312,9 @@ struct PhotoMealSheet: View {
         VStack(spacing: 20) {
             Spacer()
             ProgressView().scaleEffect(1.5)
-            Text("Mahlzeit wird analysiert…").foregroundStyle(.secondary)
+            Text(retryStatus ?? "Mahlzeit wird analysiert…")
+                .foregroundStyle(.secondary)
+                .animation(.easeInOut, value: retryStatus)
             Spacer()
         }
     }
@@ -315,6 +341,26 @@ struct PhotoMealSheet: View {
                     .padding(10).frame(maxWidth: .infinity)
                     .background(Color.green.opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                // Inline-Fehlerbanner für Fehler aus KI-Zusatz / Neu-Analysieren
+                if let msg = confirmError {
+                    HStack(spacing: 8) {
+                        Image(systemName: "wifi.exclamationmark")
+                            .foregroundStyle(.orange)
+                        Text(msg)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button { confirmError = nil } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .padding(10)
+                    .background(Color.orange.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
 
                 // Nährwert-Zusammenfassung
                 if !draftItems.isEmpty {
@@ -560,29 +606,37 @@ struct PhotoMealSheet: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Error
+    // MARK: - Inline Error Banner
 
-    private var errorView: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            Image(systemName: "xmark.circle.fill").font(.system(size: 56)).foregroundStyle(.red)
-            Text("Erkennung fehlgeschlagen").font(.headline)
-            if let msg = errorMessage {
-                Text(msg).font(.subheadline).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center).padding(.horizontal)
+    @ViewBuilder
+    private func inlineErrorBanner(message: String, onRetry: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "wifi.exclamationmark")
+                    .foregroundStyle(.orange)
+                Text("Verbindungsfehler")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.orange)
+                Spacer()
             }
-            Button("Nochmal versuchen") {
-                capturedImage = nil; draftItems = []; errorMessage = nil
-                photosPickerItem = nil; detectedLabels = []
-                userComment = ""; analysisComplete = false
-                expandedGramsID = nil
-                showAdjustment = false; adjustmentPrompt = ""
-                showAddItem = false; addItemPrompt = ""
-                showTextInput = false; mealDescription = ""
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
+            Button(action: onRetry) {
+                Label("Erneut versuchen", systemImage: "arrow.clockwise")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
             }
-            .buttonStyle(.borderedProminent)
-            Spacer(); Spacer()
+            .buttonStyle(.plain)
         }
+        .padding(12)
+        .background(Color.orange.opacity(0.1))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Logic
@@ -621,25 +675,55 @@ struct PhotoMealSheet: View {
         capturedImage = image
     }
 
+    // Prüft ob ein Fehler einen Retry rechtfertigt
+    private func isRetriable(_ error: Error) -> Bool {
+        if error is URLError { return true }
+        if let e = error as? PhotoMealRecognizer.RecognizerError {
+            switch e {
+            case .networkError(let code, _):
+                return code == 429 || code >= 500 || code == 0
+            case .parseFailed, .noItemsDetected:
+                return true
+            default:
+                return false
+            }
+        }
+        return true // Im Zweifel: retry
+    }
+
     @MainActor
     private func analyze(image: UIImage, comment: String = "") async {
-        isAnalyzing = true; errorMessage = nil
-        do {
-            let result     = try await PhotoMealRecognizer.recognize(image: image, comment: comment)
-            detectedLabels = result.detectedLabels
-            var seen       = Set<PersistentIdentifier>()
-            draftItems     = result.items.compactMap { item -> DraftItem? in
-                let food    = matchOrCreate(item: item)
-                guard seen.insert(food.persistentModelID).inserted else { return nil }
-                let snapped = max(5.0, (Double(item.estimatedGrams) / 5.0).rounded() * 5.0)
-                return DraftItem(name: item.name, grams: snapped, matchedFood: food)
+        isAnalyzing = true; errorMessage = nil; retryStatus = nil
+        for attempt in 1...Self.maxRetries {
+            if attempt > 1 {
+                retryStatus = "Verbindung wird hergestellt… (Versuch \(attempt)/\(Self.maxRetries))"
+                try? await Task.sleep(nanoseconds: UInt64(attempt - 1) * 2_000_000_000)
             }
-            showLabels       = draftItems.isEmpty
-            analysisComplete = true
-        } catch {
-            errorMessage = error.localizedDescription
+            do {
+                let result     = try await PhotoMealRecognizer.recognize(image: image, comment: comment)
+                detectedLabels = result.detectedLabels
+                var seen       = Set<PersistentIdentifier>()
+                draftItems     = result.items.compactMap { item -> DraftItem? in
+                    let food    = matchOrCreate(item: item)
+                    guard seen.insert(food.persistentModelID).inserted else { return nil }
+                    let snapped = max(5.0, (Double(item.estimatedGrams) / 5.0).rounded() * 5.0)
+                    return DraftItem(name: item.name, grams: snapped, matchedFood: food)
+                }
+                showLabels       = draftItems.isEmpty
+                analysisComplete = true
+                isAnalyzing      = false
+                retryStatus      = nil
+                return
+            } catch {
+                if !isRetriable(error) || attempt == Self.maxRetries {
+                    errorMessage = error.localizedDescription
+                    break
+                }
+                // Weiter → nächster Versuch
+            }
         }
         isAnalyzing = false
+        retryStatus = nil
     }
 
     private func match(_ name: String) -> Food? {
@@ -649,29 +733,40 @@ struct PhotoMealSheet: View {
             .first
     }
 
-    /// Text-basierte Analyse (ohne Foto).
     @MainActor
     private func analyzeText(description: String) async {
-        isAnalyzing = true; errorMessage = nil
-        do {
-            let result     = try await PhotoMealRecognizer.recognizeFromText(description)
-            detectedLabels = result.detectedLabels
-            var seen       = Set<PersistentIdentifier>()
-            draftItems     = result.items.compactMap { item -> DraftItem? in
-                let food    = matchOrCreate(item: item)
-                guard seen.insert(food.persistentModelID).inserted else { return nil }
-                let snapped = max(5.0, (Double(item.estimatedGrams) / 5.0).rounded() * 5.0)
-                return DraftItem(name: item.name, grams: snapped, matchedFood: food)
+        isAnalyzing = true; errorMessage = nil; retryStatus = nil
+        for attempt in 1...Self.maxRetries {
+            if attempt > 1 {
+                retryStatus = "Verbindung wird hergestellt… (Versuch \(attempt)/\(Self.maxRetries))"
+                try? await Task.sleep(nanoseconds: UInt64(attempt - 1) * 2_000_000_000)
             }
-            showLabels       = draftItems.isEmpty
-            analysisComplete = true
-        } catch {
-            errorMessage = error.localizedDescription
+            do {
+                let result     = try await PhotoMealRecognizer.recognizeFromText(description)
+                detectedLabels = result.detectedLabels
+                var seen       = Set<PersistentIdentifier>()
+                draftItems     = result.items.compactMap { item -> DraftItem? in
+                    let food    = matchOrCreate(item: item)
+                    guard seen.insert(food.persistentModelID).inserted else { return nil }
+                    let snapped = max(5.0, (Double(item.estimatedGrams) / 5.0).rounded() * 5.0)
+                    return DraftItem(name: item.name, grams: snapped, matchedFood: food)
+                }
+                showLabels       = draftItems.isEmpty
+                analysisComplete = true
+                isAnalyzing      = false
+                retryStatus      = nil
+                return
+            } catch {
+                if !isRetriable(error) || attempt == Self.maxRetries {
+                    errorMessage = error.localizedDescription
+                    break
+                }
+            }
         }
         isAnalyzing = false
+        retryStatus = nil
     }
 
-    /// Analyse mit neuem Kommentar wiederholen (alle Einträge werden ersetzt).
     @MainActor
     private func reanalyze(comment: String) async {
         showAdjustment   = false
@@ -680,6 +775,7 @@ struct PhotoMealSheet: View {
         detectedLabels   = []
         analysisComplete = false
         expandedGramsID  = nil
+        confirmError     = nil
         if let image = capturedImage {
             await analyze(image: image, comment: comment)
         } else {
@@ -688,34 +784,47 @@ struct PhotoMealSheet: View {
         }
     }
 
-    /// Einzelnes Lebensmittel per Beschreibung per KI hinzufügen (bestehende Liste bleibt).
     @MainActor
     private func addItemViaAI(description: String) async {
-        showAddItem = false
-        isAnalyzing = true
-        do {
-            let result: RecognitionResult
-            if let image = capturedImage {
-                result = try await PhotoMealRecognizer.recognizeSingle(image: image, description: description)
-            } else {
-                result = try await PhotoMealRecognizer.recognizeSingleFromText(
-                    existingDescription: mealDescription, addition: description)
+        showAddItem  = false
+        isAnalyzing  = true
+        confirmError = nil
+        retryStatus  = nil
+        for attempt in 1...Self.maxRetries {
+            if attempt > 1 {
+                retryStatus = "Verbindung wird hergestellt… (Versuch \(attempt)/\(Self.maxRetries))"
+                try? await Task.sleep(nanoseconds: UInt64(attempt - 1) * 2_000_000_000)
             }
-            var existingIDs = Set(draftItems.compactMap { $0.matchedFood?.persistentModelID })
-            for item in result.items {
-                let food    = matchOrCreate(item: item)
-                guard existingIDs.insert(food.persistentModelID).inserted else { continue }
-                let snapped = max(5.0, (Double(item.estimatedGrams) / 5.0).rounded() * 5.0)
-                draftItems.append(DraftItem(name: item.name, grams: snapped, matchedFood: food))
+            do {
+                let result: RecognitionResult
+                if let image = capturedImage {
+                    result = try await PhotoMealRecognizer.recognizeSingle(image: image, description: description)
+                } else {
+                    result = try await PhotoMealRecognizer.recognizeSingleFromText(
+                        existingDescription: mealDescription, addition: description)
+                }
+                var existingIDs = Set(draftItems.compactMap { $0.matchedFood?.persistentModelID })
+                for item in result.items {
+                    let food    = matchOrCreate(item: item)
+                    guard existingIDs.insert(food.persistentModelID).inserted else { continue }
+                    let snapped = max(5.0, (Double(item.estimatedGrams) / 5.0).rounded() * 5.0)
+                    draftItems.append(DraftItem(name: item.name, grams: snapped, matchedFood: food))
+                }
+                addItemPrompt = ""
+                isAnalyzing   = false
+                retryStatus   = nil
+                return
+            } catch {
+                if !isRetriable(error) || attempt == Self.maxRetries {
+                    confirmError = error.localizedDescription
+                    break
+                }
             }
-            addItemPrompt = ""
-        } catch {
-            // Fehler ignorieren — kein Eintrag wird hinzugefügt, Nutzer kann es erneut versuchen
         }
         isAnalyzing = false
+        retryStatus = nil
     }
 
-    /// Versucht das Lebensmittel in der DB zu finden – legt es sonst neu an (source: .custom).
     @MainActor
     private func matchOrCreate(item: RecognizedFoodItem) -> Food {
         if let existing = match(item.name) { return existing }
@@ -740,7 +849,6 @@ struct PhotoMealSheet: View {
         let day = Calendar.current.startOfDay(for: date)
         for item in draftItems {
             guard let food = item.matchedFood, item.grams > 0 else { continue }
-            // Namen übernehmen wenn KI ein neues Lebensmittel angelegt hat und User ihn geändert hat
             let trimmed = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
             if food.source == .custom && !trimmed.isEmpty && food.name != trimmed {
                 food.name = trimmed

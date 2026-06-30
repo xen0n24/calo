@@ -208,7 +208,7 @@ enum PhotoMealRecognizer {
         let urlString = "https://generativelanguage.googleapis.com/v1beta/models/\(modelID):generateContent?key=\(apiKey)"
         guard let url = URL(string: urlString) else { throw RecognizerError.parseFailed }
 
-        var request        = URLRequest(url: url, timeoutInterval: 30)
+        var request        = URLRequest(url: url, timeoutInterval: 45)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody   = try JSONSerialization.data(withJSONObject: body)
